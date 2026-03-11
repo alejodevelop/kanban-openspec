@@ -1,6 +1,6 @@
-import { boards } from "./boards";
-import { cards } from "./cards";
-import { columns } from "./columns";
+import { boards } from "./boards.ts";
+import { cards } from "./cards.ts";
+import { columns } from "./columns.ts";
 
 /**
  * Shared data-model entrypoint.

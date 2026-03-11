@@ -1,11 +1,12 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { schema } from "./index";
+import { schema } from "./index.ts";
 
-const migrationDir = join(process.cwd(), "drizzle");
+const migrationDir = fileURLToPath(new URL("../../../../../drizzle", import.meta.url));
 const migrationFile = readdirSync(migrationDir)
   .filter((fileName) => fileName.endsWith(".sql"))
   .sort()[0];

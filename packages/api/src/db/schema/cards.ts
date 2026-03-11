@@ -1,6 +1,6 @@
 import { index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
-import { columns } from "./columns";
+import { columns } from "./columns.ts";
 
 export const cards = pgTable(
   "cards",

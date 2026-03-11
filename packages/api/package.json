@@ -2,5 +2,22 @@
   "name": "@kanban/api",
   "version": "1.0.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --experimental-strip-types src/server.ts",
+    "start": "node --experimental-strip-types src/server.ts",
+    "test": "vitest run src/routes/health.test.ts src/server.test.ts src/db/client.test.ts src/db/schema/schema-verification.test.ts",
+    "validate": "node --experimental-strip-types src/scripts/validate-runtime.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.1",
+    "express": "^5.1.0",
+    "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/pg": "^8.15.6",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
 }

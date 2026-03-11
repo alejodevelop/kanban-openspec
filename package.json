@@ -7,9 +7,13 @@
     "packages/api"
   ],
   "scripts": {
+    "api:dev": "npm run dev --workspace @kanban/api",
+    "api:start": "npm run start --workspace @kanban/api",
+    "api:test": "npm run test --workspace @kanban/api",
+    "api:validate": "npm run validate --workspace @kanban/api",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:check": "vitest run packages/api/src/db/schema/schema-verification.test.ts",
-    "test": "npm run db:check"
+    "test": "npm run db:check && npm run api:test"
   },
   "devDependencies": {
     "@types/node": "^25.4.0",
