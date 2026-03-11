@@ -25,6 +25,19 @@ export type CreateCardPayload = {
   description?: string;
 };
 
+export type ReorderColumnsPayload = {
+  columnIds: string[];
+};
+
+export type ReorderCardsColumnPayload = {
+  columnId: string;
+  cardIds: string[];
+};
+
+export type ReorderCardsPayload = {
+  columns: ReorderCardsColumnPayload[];
+};
+
 export type CreatedCard = {
   id: string;
   columnId: string;
@@ -37,4 +50,8 @@ export const boardApi = {
   getBoard: async (boardId: string) => await apiClient.get<BoardView>(`/api/boards/${boardId}`),
   createCard: async (columnId: string, payload: CreateCardPayload) =>
     await apiClient.post<CreatedCard>(`/api/columns/${columnId}/cards`, payload),
+  reorderColumns: async (boardId: string, payload: ReorderColumnsPayload) =>
+    await apiClient.post<BoardView>(`/api/boards/${boardId}/columns/reorder`, payload),
+  reorderCards: async (boardId: string, payload: ReorderCardsPayload) =>
+    await apiClient.post<BoardView>(`/api/boards/${boardId}/cards/reorder`, payload),
 };

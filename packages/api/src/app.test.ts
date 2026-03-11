@@ -3,11 +3,14 @@ import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createApp } from "./app.ts";
+import { BoardNotFoundError } from "./features/boards/board-errors.ts";
 import {
   ColumnNotFoundError,
   CreateCardValidationError,
   type CreatedCard,
 } from "./features/cards/create-card.ts";
+import { ReorderColumnsValidationError } from "./features/boards/reorder-columns.ts";
+import { ReorderCardsValidationError } from "./features/cards/reorder-cards.ts";
 import type { BoardView } from "./features/boards/get-board.ts";
 
 const VALID_BOARD_ID = "11111111-1111-4111-8111-111111111111";
@@ -254,6 +257,289 @@ describe("app business routes", () => {
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({
       error: "Column not found",
+    });
+  });
+
+  it("reorders columns through the board mutation endpoint", async () => {
+    let board: BoardView = {
+      id: VALID_BOARD_ID,
+      title: "Delivery board",
+      columns: [
+        {
+          id: VALID_COLUMN_ID,
+          title: "Todo",
+          position: 0,
+          cards: [],
+        },
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          title: "Doing",
+          position: 1,
+          cards: [],
+        },
+      ],
+    };
+
+    const app = createApp({
+      getBoard: async (boardId) => (boardId === VALID_BOARD_ID ? board : null),
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+      reorderColumns: async ({ boardId, columnIds }) => {
+        if (boardId !== VALID_BOARD_ID || !Array.isArray(columnIds)) {
+          throw new Error("Unexpected reorderColumns call");
+        }
+
+        const columnsById = new Map(board.columns.map((column) => [column.id, column]));
+        board = {
+          ...board,
+          columns: columnIds.map((columnId, index) => {
+            const column = columnsById.get(String(columnId));
+            if (column === undefined) {
+              throw new Error(`Missing test column ${String(columnId)}`);
+            }
+
+            return {
+              ...column,
+              position: index,
+            };
+          }),
+        };
+      },
+      reorderCards: async () => {
+        throw new Error("Unexpected reorderCards call");
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/boards/${VALID_BOARD_ID}/columns/reorder`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        columnIds: ["33333333-3333-4333-8333-333333333333", VALID_COLUMN_ID],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      columns: [
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          position: 0,
+        },
+        {
+          id: VALID_COLUMN_ID,
+          position: 1,
+        },
+      ],
+    });
+  });
+
+  it("reorders cards between columns through the board mutation endpoint", async () => {
+    let board: BoardView = {
+      id: VALID_BOARD_ID,
+      title: "Delivery board",
+      columns: [
+        {
+          id: VALID_COLUMN_ID,
+          title: "Todo",
+          position: 0,
+          cards: [
+            {
+              id: "card-1",
+              title: "Primera",
+              description: null,
+              position: 0,
+            },
+            {
+              id: "card-2",
+              title: "Segunda",
+              description: null,
+              position: 1,
+            },
+          ],
+        },
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          title: "Done",
+          position: 1,
+          cards: [
+            {
+              id: "card-3",
+              title: "Tercera",
+              description: null,
+              position: 0,
+            },
+          ],
+        },
+      ],
+    };
+
+    const app = createApp({
+      getBoard: async (boardId) => (boardId === VALID_BOARD_ID ? board : null),
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+      reorderColumns: async () => {
+        throw new Error("Unexpected reorderColumns call");
+      },
+      reorderCards: async ({ boardId, columns }) => {
+        if (boardId !== VALID_BOARD_ID || !Array.isArray(columns)) {
+          throw new Error("Unexpected reorderCards call");
+        }
+
+        const cardsById = new Map(
+          board.columns.flatMap((column) =>
+            column.cards.map((card) => [
+              card.id,
+              {
+                ...card,
+              },
+            ]),
+          ),
+        );
+
+        board = {
+          ...board,
+          columns: board.columns.map((column) => {
+            const payload = columns.find(
+              (entry): entry is { columnId: string; cardIds: string[] } =>
+                typeof entry === "object" &&
+                entry !== null &&
+                "columnId" in entry &&
+                "cardIds" in entry &&
+                (entry as { columnId?: unknown }).columnId === column.id &&
+                Array.isArray((entry as { cardIds?: unknown }).cardIds),
+            );
+
+            if (payload === undefined) {
+              return column;
+            }
+
+            return {
+              ...column,
+              cards: payload.cardIds.map((cardId, index) => {
+                const card = cardsById.get(cardId);
+                if (card === undefined) {
+                  throw new Error(`Missing test card ${cardId}`);
+                }
+
+                return {
+                  ...card,
+                  position: index,
+                };
+              }),
+            };
+          }),
+        };
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/boards/${VALID_BOARD_ID}/cards/reorder`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        columns: [
+          {
+            columnId: VALID_COLUMN_ID,
+            cardIds: ["card-1"],
+          },
+          {
+            columnId: "33333333-3333-4333-8333-333333333333",
+            cardIds: ["card-2", "card-3"],
+          },
+        ],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      columns: [
+        {
+          id: VALID_COLUMN_ID,
+          cards: [{ id: "card-1", position: 0 }],
+        },
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          cards: [
+            { id: "card-2", position: 0 },
+            { id: "card-3", position: 1 },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("returns a client error when the reorder payload is invalid", async () => {
+    const app = createApp({
+      getBoard: async () => null,
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+      reorderColumns: async () => {
+        throw new ReorderColumnsValidationError(
+          "Column reorder payload must include each board column exactly once",
+        );
+      },
+      reorderCards: async () => {
+        throw new Error("Unexpected reorderCards call");
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/boards/${VALID_BOARD_ID}/columns/reorder`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        columnIds: [VALID_COLUMN_ID],
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Column reorder payload must include each board column exactly once",
+    });
+  });
+
+  it("returns not found when the board reorder target does not exist", async () => {
+    const app = createApp({
+      getBoard: async () => null,
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+      reorderColumns: async ({ boardId }) => {
+        throw new BoardNotFoundError(boardId);
+      },
+      reorderCards: async () => {
+        throw new ReorderCardsValidationError("Unexpected reorderCards call");
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/boards/${VALID_BOARD_ID}/columns/reorder`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        columnIds: [VALID_COLUMN_ID],
+      }),
+    });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "Board not found",
     });
   });
 });

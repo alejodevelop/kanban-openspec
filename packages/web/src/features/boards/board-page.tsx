@@ -1,7 +1,12 @@
-import { useEffect, useEffectEvent, useState, type FormEvent } from "react";
+import { startTransition, useEffect, useEffectEvent, useState, type FormEvent } from "react";
 
 import { ApiClientError } from "../../lib/api-client";
-import { boardApi, type BoardView, type CreateCardPayload } from "./board-api";
+import {
+  boardApi,
+  type BoardView,
+  type CreateCardPayload,
+  type ReorderCardsColumnPayload,
+} from "./board-api";
 
 type BoardPageProps = {
   boardId: string;
@@ -34,6 +39,30 @@ const getCreateErrorMessage = (error: unknown): string => {
   }
 
   return "No pudimos crear la tarjeta. Intenta de nuevo.";
+};
+
+const getReorderErrorMessage = (error: unknown): string => {
+  if (error instanceof ApiClientError && error.status === 400) {
+    return "El tablero cambio mientras intentabas mover elementos. Recarga e intenta de nuevo.";
+  }
+
+  if (error instanceof ApiClientError && error.status === 404) {
+    return "El tablero ya no existe o quedo fuera de sync. Recarga la ruta.";
+  }
+
+  return "No pudimos guardar el nuevo orden. Intenta de nuevo.";
+};
+
+const swapItems = <T,>(items: T[], fromIndex: number, toIndex: number): T[] => {
+  const nextItems = items.slice();
+  const [movedItem] = nextItems.splice(fromIndex, 1);
+
+  if (movedItem === undefined) {
+    return items;
+  }
+
+  nextItems.splice(toIndex, 0, movedItem);
+  return nextItems;
 };
 
 const CardComposer = ({ columnId, columnTitle, onCreate }: CardComposerProps) => {
@@ -98,6 +127,15 @@ const CardComposer = ({ columnId, columnTitle, onCreate }: CardComposerProps) =>
 
 export const BoardPage = ({ boardId }: BoardPageProps) => {
   const [state, setState] = useState<BoardPageState>({ status: "loading" });
+  const [isReordering, setIsReordering] = useState(false);
+  const [reorderErrorMessage, setReorderErrorMessage] = useState<string | null>(null);
+
+  const applyBoardState = useEffectEvent((board: BoardView) => {
+    startTransition(() => {
+      setState(resolveBoardState(board));
+    });
+    setReorderErrorMessage(null);
+  });
 
   const loadBoard = useEffectEvent(async (nextBoardId: string) => {
     setState((current) => {
@@ -110,7 +148,7 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
 
     try {
       const board = await boardApi.getBoard(nextBoardId);
-      setState(resolveBoardState(board));
+      applyBoardState(board);
     } catch (error) {
       if (error instanceof ApiClientError && error.status === 404) {
         setState({ status: "not-found" });
@@ -131,6 +169,101 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
   const handleCreateCard = async (columnId: string, payload: CreateCardPayload) => {
     await boardApi.createCard(columnId, payload);
     await loadBoard(boardId);
+  };
+
+  const runReorder = useEffectEvent(async (reorderOperation: () => Promise<BoardView>) => {
+    setIsReordering(true);
+    setReorderErrorMessage(null);
+
+    try {
+      const board = await reorderOperation();
+      applyBoardState(board);
+    } catch (error) {
+      setReorderErrorMessage(getReorderErrorMessage(error));
+    } finally {
+      setIsReordering(false);
+    }
+  });
+
+  const handleMoveColumn = (columnIndex: number, direction: -1 | 1) => {
+    if (state.status !== "ready") {
+      return;
+    }
+
+    const destinationIndex = columnIndex + direction;
+    if (destinationIndex < 0 || destinationIndex >= state.board.columns.length) {
+      return;
+    }
+
+    const nextColumnIds = swapItems(
+      state.board.columns.map((column) => column.id),
+      columnIndex,
+      destinationIndex,
+    );
+
+    void runReorder(async () => await boardApi.reorderColumns(state.board.id, { columnIds: nextColumnIds }));
+  };
+
+  const handleReorderCards = (columns: ReorderCardsColumnPayload[]) => {
+    if (state.status !== "ready") {
+      return;
+    }
+
+    void runReorder(async () => await boardApi.reorderCards(state.board.id, { columns }));
+  };
+
+  const handleMoveCardWithinColumn = (columnIndex: number, cardIndex: number, direction: -1 | 1) => {
+    if (state.status !== "ready") {
+      return;
+    }
+
+    const column = state.board.columns[columnIndex];
+    if (column === undefined) {
+      return;
+    }
+
+    const destinationIndex = cardIndex + direction;
+    if (destinationIndex < 0 || destinationIndex >= column.cards.length) {
+      return;
+    }
+
+    handleReorderCards([
+      {
+        columnId: column.id,
+        cardIds: swapItems(
+          column.cards.map((card) => card.id),
+          cardIndex,
+          destinationIndex,
+        ),
+      },
+    ]);
+  };
+
+  const handleMoveCardAcrossColumns = (columnIndex: number, cardIndex: number, direction: -1 | 1) => {
+    if (state.status !== "ready") {
+      return;
+    }
+
+    const sourceColumn = state.board.columns[columnIndex];
+    const destinationColumn = state.board.columns[columnIndex + direction];
+    const movedCard = sourceColumn?.cards[cardIndex];
+
+    if (sourceColumn === undefined || destinationColumn === undefined || movedCard === undefined) {
+      return;
+    }
+
+    handleReorderCards([
+      {
+        columnId: sourceColumn.id,
+        cardIds: sourceColumn.cards
+          .filter((_, index) => index !== cardIndex)
+          .map((card) => card.id),
+      },
+      {
+        columnId: destinationColumn.id,
+        cardIds: [...destinationColumn.cards.map((card) => card.id), movedCard.id],
+      },
+    ]);
   };
 
   if (state.status === "loading") {
@@ -171,6 +304,11 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
         </div>
         <p className="board-meta">Ruta activa: /boards/{board.id}</p>
       </header>
+      {reorderErrorMessage === null ? null : (
+        <p className="board-feedback board-feedback-error board-feedback-banner" role="alert">
+          {reorderErrorMessage}
+        </p>
+      )}
 
       {state.status === "empty" ? (
         <div className="board-empty-state">
@@ -179,20 +317,86 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
         </div>
       ) : (
         <div className="board-columns" role="list" aria-label="Columnas del tablero">
-          {board.columns.map((column) => (
+          {board.columns.map((column, columnIndex) => (
             <article className="board-column" key={column.id} role="listitem">
               <header className="board-column-header">
-                <h3>{column.title}</h3>
-                <span>{column.cards.length} tarjetas</span>
+                <div className="board-column-heading">
+                  <h3>{column.title}</h3>
+                  <span>{column.cards.length} tarjetas</span>
+                </div>
+                <div className="board-column-actions">
+                  <button
+                    aria-label={`Mover ${column.title} a la izquierda`}
+                    className="board-action-button"
+                    disabled={isReordering || columnIndex === 0}
+                    onClick={() => handleMoveColumn(columnIndex, -1)}
+                    type="button"
+                  >
+                    Izq
+                  </button>
+                  <button
+                    aria-label={`Mover ${column.title} a la derecha`}
+                    className="board-action-button"
+                    disabled={isReordering || columnIndex === board.columns.length - 1}
+                    onClick={() => handleMoveColumn(columnIndex, 1)}
+                    type="button"
+                  >
+                    Der
+                  </button>
+                </div>
               </header>
 
               <ol className="card-list">
-                {column.cards.map((card) => (
+                {column.cards.map((card, cardIndex) => (
                   <li className="card-item" key={card.id}>
-                    <p className="card-title">{card.title}</p>
-                    {card.description === null ? null : (
-                      <p className="card-description">{card.description}</p>
-                    )}
+                    <div className="card-item-body">
+                      <p className="card-title">{card.title}</p>
+                      {card.description === null ? null : (
+                        <p className="card-description">{card.description}</p>
+                      )}
+                    </div>
+                    <div className="card-actions">
+                      <button
+                        aria-label={`Subir ${card.title}`}
+                        className="board-action-button"
+                        disabled={isReordering || cardIndex === 0}
+                        onClick={() => handleMoveCardWithinColumn(columnIndex, cardIndex, -1)}
+                        type="button"
+                      >
+                        Subir
+                      </button>
+                      <button
+                        aria-label={`Bajar ${card.title}`}
+                        className="board-action-button"
+                        disabled={isReordering || cardIndex === column.cards.length - 1}
+                        onClick={() => handleMoveCardWithinColumn(columnIndex, cardIndex, 1)}
+                        type="button"
+                      >
+                        Bajar
+                      </button>
+                      <button
+                        aria-label={`Mover ${card.title} a ${
+                          board.columns[columnIndex - 1]?.title ?? "la columna anterior"
+                        }`}
+                        className="board-action-button"
+                        disabled={isReordering || columnIndex === 0}
+                        onClick={() => handleMoveCardAcrossColumns(columnIndex, cardIndex, -1)}
+                        type="button"
+                      >
+                        Izq
+                      </button>
+                      <button
+                        aria-label={`Mover ${card.title} a ${
+                          board.columns[columnIndex + 1]?.title ?? "la columna siguiente"
+                        }`}
+                        className="board-action-button"
+                        disabled={isReordering || columnIndex === board.columns.length - 1}
+                        onClick={() => handleMoveCardAcrossColumns(columnIndex, cardIndex, 1)}
+                        type="button"
+                      >
+                        Der
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ol>

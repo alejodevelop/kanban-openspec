@@ -1,7 +1,9 @@
 import express from "express";
 
 import { type GetBoardUseCase } from "./features/boards/get-board.ts";
+import { type ReorderColumnsUseCase } from "./features/boards/reorder-columns.ts";
 import { type CreateCardUseCase } from "./features/cards/create-card.ts";
+import { type ReorderCardsUseCase } from "./features/cards/reorder-cards.ts";
 import { createHealthRouter, type HealthCheck } from "./routes/health.ts";
 import { createBoardsRouter } from "./routes/boards.ts";
 import { createColumnsRouter } from "./routes/columns.ts";
@@ -10,9 +12,17 @@ type AppOptions = {
   checkDatabase?: HealthCheck;
   getBoard?: GetBoardUseCase;
   createCard?: CreateCardUseCase;
+  reorderColumns?: ReorderColumnsUseCase;
+  reorderCards?: ReorderCardsUseCase;
 };
 
-export const createApp = ({ checkDatabase, getBoard, createCard }: AppOptions = {}) => {
+export const createApp = ({
+  checkDatabase,
+  getBoard,
+  createCard,
+  reorderColumns,
+  reorderCards,
+}: AppOptions = {}) => {
   const app = express();
 
   app.disable("x-powered-by");
@@ -30,7 +40,7 @@ export const createApp = ({ checkDatabase, getBoard, createCard }: AppOptions = 
   });
   app.use(express.json());
   app.use("/health", createHealthRouter({ checkDatabase }));
-  app.use("/api/boards", createBoardsRouter({ getBoard }));
+  app.use("/api/boards", createBoardsRouter({ getBoard, reorderColumns, reorderCards }));
   app.use("/api/columns", createColumnsRouter({ createCard }));
 
   return app;
