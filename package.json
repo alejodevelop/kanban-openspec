@@ -4,19 +4,26 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "packages/api"
+    "packages/api",
+    "packages/web"
   ],
   "scripts": {
+    "dev": "concurrently --kill-others-on-fail --names api,web --prefix-colors blue,green \"npm run api:dev\" \"npm run web:dev\"",
     "api:dev": "npm run dev --workspace @kanban/api",
     "api:start": "npm run start --workspace @kanban/api",
     "api:test": "npm run test --workspace @kanban/api",
     "api:validate": "npm run validate --workspace @kanban/api",
+    "web:dev": "npm run dev --workspace @kanban/web",
+    "web:build": "npm run build --workspace @kanban/web",
+    "web:test": "npm run test --workspace @kanban/web",
+    "web:validate": "npm run validate --workspace @kanban/web",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:check": "vitest run packages/api/src/db/schema/schema-verification.test.ts",
-    "test": "npm run db:check && npm run api:test"
+    "test": "npm run db:check && npm run api:test && npm run web:test"
   },
   "devDependencies": {
     "@types/node": "^25.4.0",
+    "concurrently": "^9.2.1",
     "drizzle-kit": "^0.31.9",
     "drizzle-orm": "^0.45.1",
     "pg": "^8.20.0",

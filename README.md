@@ -1,6 +1,6 @@
 # Kanban OpenSpec
 
-Proyecto Kanban guiado por OpenSpec. El repositorio esta en una etapa temprana: hoy ya existe el modelo de datos base en PostgreSQL con Drizzle ORM, pero todavia no estan construidos el runtime del backend, la API HTTP ni el frontend React.
+Proyecto Kanban guiado por OpenSpec. El repositorio ya tiene una base operativa con modelo de datos en PostgreSQL, runtime HTTP en Express y un frontend React/Vite arrancable. Lo que falta ahora es conectar esas piezas con los flujos reales del board.
 
 ## Estado actual
 
@@ -9,11 +9,14 @@ El sistema ya cubre estas piezas:
 - Modelo relacional `boards -> columns -> cards`.
 - Migracion SQL inicial generada con Drizzle.
 - Verificacion automatizada del schema y de las relaciones clave.
+- Runtime HTTP minimo con Express y `GET /health`.
+- Frontend React/Vite con shell base, routing inicial y cliente API compartido.
 - Especificacion principal en OpenSpec para el modelo de datos Kanban.
 
 Hoy el codigo real vive sobre estas bases:
 
-- Backend de datos: `packages/api/src/db/schema`
+- Backend HTTP: `packages/api/src/`
+- Frontend web: `packages/web/src/`
 - Migraciones: `drizzle/`
 - Spec principal: `openspec/specs/kanban-data-model/spec.md`
 
@@ -66,20 +69,25 @@ Estos son los seis changes planeados para llegar a un frontend interactivo sin m
 │   ├── changes/
 │   └── specs/
 ├── packages/
-│   └── api/
-│       └── src/db/schema/
+│   ├── api/
+│       └── src/
+│   └── web/
+│       └── src/
 ├── package.json
 └── drizzle.config.ts
 ```
 
 ## Scripts utiles
 
-- `npm test`: ejecuta la verificacion actual del schema.
+- `npm test`: ejecuta el check del schema, las pruebas del backend y el smoke test del frontend.
+- `npm run dev`: levanta API y frontend juntos para desarrollo local.
 - `npm run db:generate`: genera migraciones desde el schema de Drizzle.
 - `npm run api:dev`: levanta el backend Express desde `packages/api`.
 - `npm run api:validate`: arranca el backend, consulta `GET /health` y verifica la conectividad a PostgreSQL usando `DATABASE_URL`.
+- `npm run web:dev`: levanta Vite para el frontend en `packages/web`.
+- `npm run web:validate`: typecheck, smoke test y build del frontend.
 
-## Runtime local del backend
+## Runtime local
 
 El change `bootstrap-api-runtime` deja una base operativa minima en `packages/api`:
 
@@ -88,11 +96,20 @@ El change `bootstrap-api-runtime` deja una base operativa minima en `packages/ap
 - Cliente compartido de Drizzle enlazado al schema Kanban.
 - Endpoint `GET /health` con comprobacion basica de PostgreSQL.
 
+El change `bootstrap-web-app` agrega la base del navegador en `packages/web`:
+
+- Entrypoint con React + Vite.
+- Shell inicial con routing base.
+- Configuracion centralizada por `VITE_API_BASE_URL`.
+- Cliente HTTP reutilizable para features futuras.
+
 Flujo local recomendado:
 
 1. Exportar `DATABASE_URL` apuntando a la base que ya tiene aplicada la migracion inicial.
-2. Ejecutar `npm run api:dev` para levantar el backend.
-3. Ejecutar `npm run api:validate` para comprobar el arranque y el healthcheck contra la base local.
+2. Opcional: crear `packages/web/.env` a partir de `packages/web/.env.example` si la API no corre en `http://localhost:3001`.
+3. Ejecutar `npm run dev` para levantar API y frontend juntos.
+4. Ejecutar `npm run api:validate` para comprobar el healthcheck del backend contra PostgreSQL.
+5. Ejecutar `npm run web:validate` para verificar typecheck, smoke test y build del frontend.
 
 ## OpenSpec
 
