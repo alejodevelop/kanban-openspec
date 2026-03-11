@@ -77,7 +77,32 @@ describe("app business routes", () => {
     const response = await fetch(`${getBaseUrl(server)}/api/boards/${VALID_BOARD_ID}`);
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("access-control-allow-origin")).toBe("*");
     await expect(response.json()).resolves.toEqual(board);
+  });
+
+  it("answers CORS preflight requests for browser clients", async () => {
+    const app = createApp({
+      getBoard: async () => null,
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/columns/${VALID_COLUMN_ID}/cards`, {
+      method: "OPTIONS",
+      headers: {
+        Origin: "http://localhost:5173",
+        "Access-Control-Request-Method": "POST",
+      },
+    });
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("access-control-allow-origin")).toBe("*");
+    expect(response.headers.get("access-control-allow-methods")).toContain("POST");
+    expect(response.headers.get("access-control-allow-headers")).toContain("Content-Type");
   });
 
   it("rejects invalid board identifiers before calling the use case", async () => {

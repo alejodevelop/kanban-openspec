@@ -16,6 +16,18 @@ export const createApp = ({ checkDatabase, getBoard, createCard }: AppOptions = 
   const app = express();
 
   app.disable("x-powered-by");
+  app.use((request, response, next) => {
+    response.setHeader("Access-Control-Allow-Origin", "*");
+    response.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+    response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+    if (request.method === "OPTIONS") {
+      response.sendStatus(204);
+      return;
+    }
+
+    next();
+  });
   app.use(express.json());
   app.use("/health", createHealthRouter({ checkDatabase }));
   app.use("/api/boards", createBoardsRouter({ getBoard }));
