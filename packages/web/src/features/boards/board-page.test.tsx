@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 
+import { ApiClientError } from "../../lib/api-client";
 import { BoardRoute } from "../../routes/board-route";
 import type { BoardView, CreatedCard } from "./board-api";
 
@@ -24,6 +25,12 @@ const renderBoardRoute = () =>
     </MemoryRouter>,
   );
 
+const buildBoard = (columns: BoardView["columns"]): BoardView => ({
+  id: "11111111-1111-4111-8111-111111111111",
+  title: "Delivery board",
+  columns,
+});
+
 describe("BoardRoute", () => {
   beforeEach(() => {
     boardApiMocks.getBoard.mockReset();
@@ -34,11 +41,19 @@ describe("BoardRoute", () => {
     cleanup();
   });
 
+  it("shows a loading state while waiting for the API response", () => {
+    boardApiMocks.getBoard.mockReturnValue(new Promise(() => {}));
+    boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
+
+    renderBoardRoute();
+
+    expect(screen.getByRole("heading", { name: /cargando tablero/i })).toBeTruthy();
+    expect(screen.getByText(/consultando columnas y tarjetas desde la api/i)).toBeTruthy();
+  });
+
   it("renders the nested board contract returned by the API", async () => {
-    boardApiMocks.getBoard.mockResolvedValue({
-      id: "11111111-1111-4111-8111-111111111111",
-      title: "Delivery board",
-      columns: [
+    boardApiMocks.getBoard.mockResolvedValue(
+      buildBoard([
         {
           id: "22222222-2222-4222-8222-222222222222",
           title: "Todo",
@@ -71,8 +86,8 @@ describe("BoardRoute", () => {
             },
           ],
         },
-      ],
-    } satisfies BoardView);
+      ]),
+    );
     boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
 
     renderBoardRoute();
@@ -80,7 +95,9 @@ describe("BoardRoute", () => {
     expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
 
     const boardColumns = [
-      ...screen.getByRole("list", { name: /columnas del tablero/i }).querySelectorAll(".board-column"),
+      ...screen
+        .getByRole("list", { name: /columnas del tablero/i })
+        .querySelectorAll<HTMLElement>(".board-column"),
     ];
     expect(within(boardColumns[0]).getByRole("heading", { name: /todo/i })).toBeTruthy();
     expect(within(boardColumns[1]).getByRole("heading", { name: /done/i })).toBeTruthy();
@@ -98,26 +115,58 @@ describe("BoardRoute", () => {
     expect(screen.getByText("Nested object works without extra mapping")).toBeTruthy();
   });
 
+  it("shows an empty state when the board exists but has no columns", async () => {
+    boardApiMocks.getBoard.mockResolvedValue(buildBoard([]));
+    boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
+
+    renderBoardRoute();
+
+    expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /este tablero todavia no tiene columnas/i })).toBeTruthy();
+    expect(screen.queryByRole("list", { name: /columnas del tablero/i })).toBeNull();
+  });
+
+  it("shows a not-found state when the backend reports a missing board", async () => {
+    boardApiMocks.getBoard.mockRejectedValue(
+      new ApiClientError("Request failed with status 404", 404, { error: "Board not found" }),
+    );
+    boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
+
+    renderBoardRoute();
+
+    expect(await screen.findByRole("heading", { name: /tablero no encontrado/i })).toBeTruthy();
+    expect(screen.getByText(/revisa el `boardid` de la ruta/i)).toBeTruthy();
+  });
+
+  it("shows an error state when the board request fails", async () => {
+    boardApiMocks.getBoard.mockRejectedValue(
+      new ApiClientError("Request failed with status 500", 500, { error: "Internal Server Error" }),
+    );
+    boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
+
+    renderBoardRoute();
+
+    const errorState = await screen.findByRole("alert");
+    expect(within(errorState).getByRole("heading", { name: /error al cargar/i })).toBeTruthy();
+    expect(within(errorState).getByText(/no pudimos cargar el tablero/i)).toBeTruthy();
+  });
+
   it("keeps a created card visible after reloading the page", async () => {
-    const boardState: BoardView = {
-      id: "11111111-1111-4111-8111-111111111111",
-      title: "Delivery board",
-      columns: [
-        {
-          id: "22222222-2222-4222-8222-222222222222",
-          title: "Todo",
-          position: 0,
-          cards: [
-            {
-              id: "card-1",
-              title: "Sembrar datos base",
-              description: null,
-              position: 0,
-            },
-          ],
-        },
-      ],
-    };
+    const boardState: BoardView = buildBoard([
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        title: "Todo",
+        position: 0,
+        cards: [
+          {
+            id: "card-1",
+            title: "Sembrar datos base",
+            description: null,
+            position: 0,
+          },
+        ],
+      },
+    ]);
 
     boardApiMocks.getBoard.mockImplementation(async () => structuredClone(boardState));
     boardApiMocks.createCard.mockImplementation(
