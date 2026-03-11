@@ -34,6 +34,70 @@ describe("BoardRoute", () => {
     cleanup();
   });
 
+  it("renders the nested board contract returned by the API", async () => {
+    boardApiMocks.getBoard.mockResolvedValue({
+      id: "11111111-1111-4111-8111-111111111111",
+      title: "Delivery board",
+      columns: [
+        {
+          id: "22222222-2222-4222-8222-222222222222",
+          title: "Todo",
+          position: 0,
+          cards: [
+            {
+              id: "card-1",
+              title: "Seed sample board",
+              description: "Visible in the first column",
+              position: 0,
+            },
+            {
+              id: "card-2",
+              title: "Connect the frontend",
+              description: null,
+              position: 1,
+            },
+          ],
+        },
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          title: "Done",
+          position: 1,
+          cards: [
+            {
+              id: "card-3",
+              title: "Validate contract consumption",
+              description: "Nested object works without extra mapping",
+              position: 0,
+            },
+          ],
+        },
+      ],
+    } satisfies BoardView);
+    boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
+
+    renderBoardRoute();
+
+    expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
+
+    const boardColumns = [
+      ...screen.getByRole("list", { name: /columnas del tablero/i }).querySelectorAll(".board-column"),
+    ];
+    expect(within(boardColumns[0]).getByRole("heading", { name: /todo/i })).toBeTruthy();
+    expect(within(boardColumns[1]).getByRole("heading", { name: /done/i })).toBeTruthy();
+
+    const firstColumnCards = [...boardColumns[0].querySelectorAll(".card-title")].map((element) =>
+      element.textContent?.trim(),
+    );
+    const secondColumnCards = [...boardColumns[1].querySelectorAll(".card-title")].map((element) =>
+      element.textContent?.trim(),
+    );
+
+    expect(firstColumnCards).toEqual(["Seed sample board", "Connect the frontend"]);
+    expect(secondColumnCards).toEqual(["Validate contract consumption"]);
+    expect(screen.getByText("Visible in the first column")).toBeTruthy();
+    expect(screen.getByText("Nested object works without extra mapping")).toBeTruthy();
+  });
+
   it("keeps a created card visible after reloading the page", async () => {
     const boardState: BoardView = {
       id: "11111111-1111-4111-8111-111111111111",

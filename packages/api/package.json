@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node --watch --experimental-strip-types src/server.ts",
     "start": "node --experimental-strip-types src/server.ts",
+    "seed:board-read": "node --experimental-strip-types src/scripts/seed-board-read-demo.ts",
     "test": "vitest run",
     "validate": "node --experimental-strip-types src/scripts/validate-runtime.ts"
   },

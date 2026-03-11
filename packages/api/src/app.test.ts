@@ -60,7 +60,33 @@ describe("app business routes", () => {
           id: VALID_COLUMN_ID,
           title: "Todo",
           position: 0,
-          cards: [],
+          cards: [
+            {
+              id: "card-1",
+              title: "Seed sample board",
+              description: "Datos visibles para el frontend",
+              position: 0,
+            },
+            {
+              id: "card-2",
+              title: "Connect GET /api/boards/:boardId",
+              description: null,
+              position: 1,
+            },
+          ],
+        },
+        {
+          id: "33333333-3333-4333-8333-333333333333",
+          title: "Done",
+          position: 1,
+          cards: [
+            {
+              id: "card-3",
+              title: "Verify nested contract",
+              description: "Board -> columns -> cards",
+              position: 0,
+            },
+          ],
         },
       ],
     };
@@ -79,6 +105,24 @@ describe("app business routes", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("access-control-allow-origin")).toBe("*");
     await expect(response.json()).resolves.toEqual(board);
+  });
+
+  it("returns not found when the requested board does not exist", async () => {
+    const app = createApp({
+      getBoard: async () => null,
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/boards/${VALID_BOARD_ID}`);
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "Board not found",
+    });
   });
 
   it("answers CORS preflight requests for browser clients", async () => {

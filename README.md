@@ -83,6 +83,7 @@ Estos son los seis changes planeados para llegar a un frontend interactivo sin m
 - `npm run dev`: levanta API y frontend juntos para desarrollo local.
 - `npm run db:generate`: genera migraciones desde el schema de Drizzle.
 - `npm run api:dev`: levanta el backend Express desde `packages/api`.
+- `npm run api:seed:board-read`: inserta un tablero demo idempotente para probar `GET /api/boards/:boardId`.
 - `npm run api:validate`: arranca el backend, consulta `GET /health` y verifica la conectividad a PostgreSQL usando `DATABASE_URL`.
 - `npm run web:dev`: levanta Vite para el frontend en `packages/web`.
 - `npm run web:validate`: typecheck, smoke test y build del frontend.
@@ -106,10 +107,12 @@ El change `bootstrap-web-app` agrega la base del navegador en `packages/web`:
 Flujo local recomendado:
 
 1. Exportar `DATABASE_URL` apuntando a la base que ya tiene aplicada la migracion inicial.
-2. Opcional: crear `packages/web/.env` a partir de `packages/web/.env.example` si la API no corre en `http://localhost:3001`.
-3. Ejecutar `npm run dev` para levantar API y frontend juntos.
-4. Ejecutar `npm run api:validate` para comprobar el healthcheck del backend contra PostgreSQL.
-5. Ejecutar `npm run web:validate` para verificar typecheck, smoke test y build del frontend.
+2. Ejecutar `npm run api:seed:board-read` para cargar un tablero demo estable con `boardId` `11111111-1111-4111-8111-111111111111`.
+3. Opcional: crear `packages/web/.env` a partir de `packages/web/.env.example` si la API no corre en `http://localhost:3001`.
+4. Ejecutar `npm run dev` para levantar API y frontend juntos.
+5. Abrir `/boards/11111111-1111-4111-8111-111111111111` en el frontend para validar la lectura completa del board.
+6. Ejecutar `npm run api:validate` para comprobar el healthcheck del backend contra PostgreSQL.
+7. Ejecutar `npm run web:validate` para verificar typecheck, smoke test y build del frontend.
 
 ## OpenSpec
 

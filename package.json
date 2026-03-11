@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "concurrently --kill-others-on-fail --names api,web --prefix-colors blue,green \"npm run api:dev\" \"npm run web:dev\"",
     "api:dev": "npm run dev --workspace @kanban/api",
+    "api:seed:board-read": "npm run seed:board-read --workspace @kanban/api",
     "api:start": "npm run start --workspace @kanban/api",
     "api:test": "npm run test --workspace @kanban/api",
     "api:validate": "npm run validate --workspace @kanban/api",
