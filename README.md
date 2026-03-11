@@ -1,123 +1,118 @@
 # Kanban OpenSpec
 
-Proyecto Kanban guiado por OpenSpec. El repositorio ya tiene una base operativa con modelo de datos en PostgreSQL, runtime HTTP en Express y un frontend React/Vite arrancable. Lo que falta ahora es conectar esas piezas con los flujos reales del board.
+Monorepo Kanban guiado por OpenSpec. El repositorio ya tiene una ruta funcional completa desde PostgreSQL hasta la UI: lectura de tablero, creacion de tarjetas y reorder de columnas y tarjetas con persistencia.
 
-## Estado actual
+## Capacidades actuales
 
-El sistema ya cubre estas piezas:
+- Modelo relacional `boards -> columns -> cards` en PostgreSQL.
+- Schema en Drizzle con migracion inicial generada en `drizzle/`.
+- Backend Express con `GET /health` y comprobacion de conectividad a PostgreSQL.
+- Endpoint para leer un board completo con columnas y tarjetas ordenadas.
+- Endpoint para crear tarjetas dentro de una columna.
+- Endpoints para reordenar columnas y tarjetas dentro de un board.
+- Frontend React/Vite con rutas `/` y `/boards/:boardId`.
+- Vista de board que consume la API real y permite crear tarjetas y mover columnas o tarjetas.
+- Suite automatizada en backend y frontend con Vitest.
+- Specs y artifacts de OpenSpec archivados en `openspec/`.
 
-- Modelo relacional `boards -> columns -> cards`.
-- Migracion SQL inicial generada con Drizzle.
-- Verificacion automatizada del schema y de las relaciones clave.
-- Runtime HTTP minimo con Express y `GET /health`.
-- Frontend React/Vite con shell base, routing inicial y cliente API compartido.
-- Especificacion principal en OpenSpec para el modelo de datos Kanban.
+## Stack actual
 
-Hoy el codigo real vive sobre estas bases:
+- Backend: Express 5, Drizzle ORM, `pg`, TypeScript.
+- Frontend: React 19, React Router 7, Vite 7, TypeScript.
+- Base de datos: PostgreSQL.
+- Testing: Vitest.
 
-- Backend HTTP: `packages/api/src/`
-- Frontend web: `packages/web/src/`
-- Migraciones: `drizzle/`
-- Spec principal: `openspec/specs/kanban-data-model/spec.md`
-
-## Arquitectura objetivo
-
-La direccion actual del sistema es:
-
-- Base de datos PostgreSQL
-- ORM y migraciones con Drizzle
-- Backend HTTP con Express
-- Frontend con React + Vite
-- Testing con Vitest y, mas adelante, Playwright para flujos end-to-end
-
-## Hito actual
-
-El repositorio ya resolvio la capa de persistencia minima. El siguiente objetivo no es ampliar el schema, sino atravesarlo con una primera ruta completa:
-
-`base de datos -> acceso a datos -> caso de uso -> endpoint HTTP -> frontend`
-
-El primer hito funcional buscado es este:
-
-1. Abrir la aplicacion.
-2. Ver un tablero real cargado desde la API.
-3. Crear una tarjeta desde la UI.
-4. Recargar y confirmar que el cambio persiste.
-
-## Roadmap propuesto
-
-Estos son los seis changes planeados para llegar a un frontend interactivo sin mezclar demasiadas decisiones en una sola iteracion:
-
-1. `bootstrap-api-runtime`
-   Resultado: backend Express arrancable, conexion a PostgreSQL y healthcheck.
-2. `read-board-api`
-   Resultado: primer endpoint para leer un tablero con columnas y tarjetas ordenadas.
-3. `bootstrap-web-app`
-   Resultado: frontend React/Vite inicial con estructura, routing y cliente API.
-4. `render-board-from-api`
-   Resultado: tablero visible en UI consumiendo datos reales del backend.
-5. `create-card-from-ui`
-   Resultado: primera mutacion completa desde el frontend hasta la base de datos.
-6. `reorder-cards-and-columns`
-   Resultado: interaccion central de Kanban con persistencia de posiciones.
-
-## Estructura actual
+## Estructura del repo
 
 ```text
 .
 ├── drizzle/
 ├── openspec/
 │   ├── changes/
+│   │   └── archive/
 │   └── specs/
 ├── packages/
 │   ├── api/
-│       └── src/
+│   │   └── src/
+│   │       ├── config/
+│   │       ├── db/
+│   │       ├── features/
+│   │       ├── routes/
+│   │       └── scripts/
 │   └── web/
 │       └── src/
-├── package.json
-└── drizzle.config.ts
+│           ├── features/
+│           ├── lib/
+│           └── routes/
+├── AGENTS.MD
+├── README.md
+├── drizzle.config.ts
+└── package.json
 ```
+
+## API actual
+
+- `GET /health`
+  Valida que el runtime este arriba y que PostgreSQL responda.
+- `GET /api/boards/:boardId`
+  Devuelve el board con columnas y tarjetas ordenadas por `position`.
+- `POST /api/columns/:columnId/cards`
+  Crea una tarjeta. Payload: `{ "title": "string", "description": "string?" }`
+- `POST /api/boards/:boardId/columns/reorder`
+  Reordena columnas. Payload: `{ "columnIds": ["..."] }`
+- `POST /api/boards/:boardId/cards/reorder`
+  Reordena tarjetas dentro de una o varias columnas. Payload:
+  `{ "columns": [{ "columnId": "...", "cardIds": ["..."] }] }`
 
 ## Scripts utiles
 
-- `npm test`: ejecuta el check del schema, las pruebas del backend y el smoke test del frontend.
-- `npm run dev`: levanta API y frontend juntos para desarrollo local.
+- `npm run dev`: levanta API y frontend juntos.
+- `npm test`: ejecuta `db:check`, pruebas del backend y pruebas del frontend.
 - `npm run db:generate`: genera migraciones desde el schema de Drizzle.
-- `npm run api:dev`: levanta el backend Express desde `packages/api`.
-- `npm run api:seed:board-read`: inserta un tablero demo idempotente para probar `GET /api/boards/:boardId`.
-- `npm run api:validate`: arranca el backend, consulta `GET /health` y verifica la conectividad a PostgreSQL usando `DATABASE_URL`.
-- `npm run web:dev`: levanta Vite para el frontend en `packages/web`.
-- `npm run web:validate`: typecheck, smoke test y build del frontend.
+- `npm run api:dev`: arranca el backend con watch.
+- `npm run api:start`: arranca el backend sin watch.
+- `npm run api:seed:board-read`: inserta un board demo idempotente.
+- `npm run api:validate`: levanta el backend, consulta `GET /health` y valida PostgreSQL.
+- `npm run web:dev`: arranca Vite.
+- `npm run web:build`: genera el build del frontend.
+- `npm run web:test`: ejecuta pruebas del frontend.
+- `npm run web:validate`: ejecuta typecheck, pruebas y build del frontend.
 
 ## Runtime local
 
-El change `bootstrap-api-runtime` deja una base operativa minima en `packages/api`:
+Variables relevantes:
 
-- App Express separada del entrypoint del servidor.
-- Configuracion centralizada con `PORT` y `DATABASE_URL`.
-- Cliente compartido de Drizzle enlazado al schema Kanban.
-- Endpoint `GET /health` con comprobacion basica de PostgreSQL.
+- `DATABASE_URL`: obligatoria para el backend y scripts de base de datos.
+- `PORT`: opcional. Default `3001`.
+- `VITE_API_BASE_URL`: opcional. Default `http://localhost:3001`.
 
-El change `bootstrap-web-app` agrega la base del navegador en `packages/web`:
+Flujo recomendado:
 
-- Entrypoint con React + Vite.
-- Shell inicial con routing base.
-- Configuracion centralizada por `VITE_API_BASE_URL`.
-- Cliente HTTP reutilizable para features futuras.
-
-Flujo local recomendado:
-
-1. Exportar `DATABASE_URL` apuntando a la base que ya tiene aplicada la migracion inicial.
-2. Ejecutar `npm run api:seed:board-read` para cargar un tablero demo estable con `boardId` `11111111-1111-4111-8111-111111111111`.
-3. Opcional: crear `packages/web/.env` a partir de `packages/web/.env.example` si la API no corre en `http://localhost:3001`.
-4. Ejecutar `npm run dev` para levantar API y frontend juntos.
-5. Abrir `/boards/11111111-1111-4111-8111-111111111111` en el frontend para validar la lectura completa del board.
-6. Ejecutar `npm run api:validate` para comprobar el healthcheck del backend contra PostgreSQL.
-7. Ejecutar `npm run web:validate` para verificar typecheck, smoke test y build del frontend.
+1. Configura `DATABASE_URL` apuntando a una base PostgreSQL que ya tenga aplicada la migracion inicial de `drizzle/`.
+2. Ejecuta `npm run api:seed:board-read` para cargar el board demo `11111111-1111-4111-8111-111111111111`.
+3. Si la API no va a correr en `http://localhost:3001`, crea `packages/web/.env` a partir de `packages/web/.env.example`.
+4. Ejecuta `npm run dev`.
+5. Abre `/boards/11111111-1111-4111-8111-111111111111`.
+6. Opcional: ejecuta `npm run api:validate` y `npm run web:validate`.
 
 ## OpenSpec
 
-El cambio ya completado y archivado es:
+Specs principales actuales:
+
+- `openspec/specs/api-runtime-foundation/spec.md`
+- `openspec/specs/kanban-data-model/spec.md`
+- `openspec/specs/board-read-api/spec.md`
+- `openspec/specs/web-app-foundation/spec.md`
+- `openspec/specs/board-view-ui/spec.md`
+- `openspec/specs/card-creation-flow/spec.md`
+- `openspec/specs/kanban-reordering/spec.md`
+
+Changes archivados:
 
 - `2026-03-11-setup-data-model`
-
-Los siguientes changes del roadmap se van a preparar como artifacts separados para poder revisar e implementar uno por uno, manteniendo el alcance de cada iteracion controlado.
+- `2026-03-11-bootstrap-api-runtime`
+- `2026-03-11-read-board-api`
+- `2026-03-11-bootstrap-web-app`
+- `2026-03-11-render-board-from-api`
+- `2026-03-11-create-card-from-ui`
+- `2026-03-11-reorder-cards-and-columns`
