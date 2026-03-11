@@ -60,8 +60,25 @@ Alternativas consideradas:
 4. Exponer el esquema agregado para consumo por servicios Express.
 5. Si hay rollback, revertir la migracion inicial y eliminar referencias al esquema en el codigo de arranque.
 
-## Open Questions
+## Resolved Questions
 
-- ¿Las tarjetas necesitan descripcion larga desde la primera iteracion o basta con titulo y estado derivado de la columna?
-- ¿Conviene reservar desde ahora un campo `board_id` en `cards` para consultas directas, aunque sea redundante con `column_id`?
-- ¿El proyecto quiere nombres en ingles para tablas y en espanol solo para documentacion, o todo el stack deberia mantenerse en ingles?
+### 1. Descripcion en tarjetas desde la primera iteracion
+Decision: incluir `description` opcional en `cards` desde esta primera version.
+
+Justificacion:
+- Permite capturar contexto minimo de trabajo sin forzar texto en todas las tarjetas.
+- Evita una migracion temprana para un campo que probablemente se necesitara pronto.
+
+### 2. Campo redundante `board_id` en `cards`
+Decision: no incluir `board_id` en `cards` en esta iteracion; se deriva via `column_id -> columns.board_id`.
+
+Justificacion:
+- Reduce redundancia y riesgo de inconsistencias entre `cards.board_id` y `columns.board_id`.
+- Mantiene el modelo base mas simple; se puede agregar en una iteracion futura si hay necesidad de performance.
+
+### 3. Convencion de idioma en nombres tecnicos
+Decision: mantener todo el stack tecnico en ingles (tablas, columnas y codigo) y usar espanol solo en documentacion.
+
+Justificacion:
+- Mejora consistencia con herramientas, librerias y convenciones del ecosistema.
+- Facilita colaboracion futura y lectura de SQL/codigo sin mezcla de idiomas en identificadores.
