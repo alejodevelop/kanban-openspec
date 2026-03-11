@@ -1,0 +1,18 @@
+schema: spec-driven
+
+# Contexto del proyecto (se inyecta en openspec instructions)
+context: |
+  Proyecto Kanban con TypeScript, React y Express.
+  Base de datos PostgreSQL con Drizzle ORM.
+  Idioma: Espanol.
+
+# Reglas especificas por artefacto
+rules:
+  proposal: |
+    Mantener bajo 500 palabras.
+  specs: |
+    Formato Given/When/Then obligatorio.
+  design: |
+    Incluir paths de archivos nuevos.
+  tasks: |
+    Maximo 10 tareas por cambio.
