@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node --watch --experimental-strip-types src/server.ts",
     "start": "node --experimental-strip-types src/server.ts",
-    "test": "vitest run src/routes/health.test.ts src/server.test.ts src/db/client.test.ts src/db/schema/schema-verification.test.ts",
+    "test": "vitest run",
     "validate": "node --experimental-strip-types src/scripts/validate-runtime.ts"
   },
   "dependencies": {

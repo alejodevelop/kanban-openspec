@@ -116,6 +116,191 @@ code {
   color: #f7efe1;
 }
 
+.board-page {
+  display: grid;
+  gap: 1.5rem;
+  padding: 2rem;
+}
+
+.board-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: end;
+}
+
+.board-header h2 {
+  margin: 0.35rem 0 0;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+}
+
+.board-kicker {
+  margin: 0;
+  color: #b15c00;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.board-meta {
+  margin: 0;
+  color: #52617f;
+  font-size: 0.95rem;
+}
+
+.board-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem;
+}
+
+.board-column {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid rgba(31, 35, 51, 0.08);
+  border-radius: 1.25rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 247, 251, 0.96)),
+    rgba(255, 255, 255, 0.85);
+  box-shadow: 0 16px 40px rgba(31, 35, 51, 0.08);
+}
+
+.board-column-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.board-column-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.board-column-header span {
+  color: #5b6781;
+  font-size: 0.9rem;
+}
+
+.card-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card-item {
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(12, 35, 64, 0.08);
+  border-radius: 1rem;
+  background: rgba(241, 246, 255, 0.78);
+}
+
+.card-title {
+  margin: 0;
+  font-weight: 700;
+}
+
+.card-description {
+  margin: 0.45rem 0 0;
+  color: #4c5976;
+  font-size: 0.95rem;
+}
+
+.card-composer {
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid rgba(31, 35, 51, 0.08);
+}
+
+.card-composer-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.card-composer-label {
+  display: grid;
+  gap: 0.35rem;
+  color: #22304d;
+  font-size: 0.94rem;
+  font-weight: 600;
+}
+
+.card-composer-input,
+.card-composer-textarea {
+  width: 100%;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(12, 35, 64, 0.14);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1f2333;
+  font: inherit;
+}
+
+.card-composer-textarea {
+  resize: vertical;
+}
+
+.card-composer-input:focus,
+.card-composer-textarea:focus {
+  outline: 2px solid rgba(74, 144, 226, 0.32);
+  outline-offset: 2px;
+}
+
+.card-composer-submit {
+  justify-self: start;
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: 999px;
+  background: #0c2340;
+  color: #f7efe1;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.card-composer-submit:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
+.board-status,
+.board-empty-state {
+  padding: 2rem;
+}
+
+.board-status h2,
+.board-empty-state h3 {
+  margin: 0;
+}
+
+.board-status p,
+.board-empty-state p {
+  margin: 0.75rem 0 0;
+  color: #42506f;
+}
+
+.board-status-warning {
+  color: #8a4a00;
+}
+
+.board-status-error {
+  color: #8d1f1f;
+}
+
+.board-feedback {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.board-feedback-error {
+  color: #8d1f1f;
+}
+
 .status-bar {
   display: flex;
   flex-wrap: wrap;
@@ -136,5 +321,14 @@ code {
 
   .route-card {
     padding: 1.25rem;
+  }
+
+  .board-page {
+    padding: 1.25rem;
+  }
+
+  .board-header {
+    align-items: start;
+    flex-direction: column;
   }
 }

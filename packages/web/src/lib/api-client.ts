@@ -61,6 +61,16 @@ export const createApiClient = ({ baseUrl, fetchImpl = fetch }: ApiClientOptions
     baseUrl,
     request,
     get: <T>(path: string, init: RequestInit = {}) => request<T>(path, { ...init, method: "GET" }),
+    post: <T>(path: string, body: unknown, init: RequestInit = {}) =>
+      request<T>(path, {
+        ...init,
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: {
+          "Content-Type": "application/json",
+          ...init.headers,
+        },
+      }),
   };
 };
 
