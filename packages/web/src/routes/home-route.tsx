@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 
 import { ActionMenu } from "../components/ui/action-menu";
 import { Dialog } from "../components/ui/dialog";
+import { ArrowRightIcon, BoardIcon, CardIcon, PencilIcon, PlusIcon, RefreshIcon, TrashIcon } from "../components/ui/icons";
 import { boardApi, type BoardSummary } from "../features/boards/board-api";
 import { ApiClientError } from "../lib/api-client";
 
@@ -248,30 +249,33 @@ export const HomeRoute = () => {
   return (
     <section className="dashboard-home">
       <header className="dashboard-home-header">
-        <div>
-          <p className="board-kicker">Board Dashboard</p>
-          <h2>Elige el tablero que necesitas y gestiona el catalogo sin salir del contexto.</h2>
-          <p className="dashboard-home-copy">
-            La home prioriza exploracion, estado y mantenimiento de boards con acciones contextuales
-            y una accion principal clara.
-          </p>
+        <div className="dashboard-home-hero">
+          <div>
+            <p className="board-kicker">Board Dashboard</p>
+            <h2>Retoma el trabajo, revisa el catalogo y abre el board correcto sin ruido extra.</h2>
+            <p className="dashboard-home-copy">
+              El dashboard concentra el contexto operativo, la creacion de boards y las acciones de mantenimiento en una sola superficie.
+            </p>
+          </div>
+
+          <div className="dashboard-actions-row">
+            <button className="primary-button" onClick={() => setIsCreatePanelOpen((current) => !current)} type="button">
+              <PlusIcon className="button-icon" />
+              <span className="button-label">{isCreatePanelOpen ? "Ocultar formulario" : "Crear board"}</span>
+            </button>
+            <button className="secondary-button" onClick={() => void loadBoards()} type="button">
+              <RefreshIcon className="button-icon" />
+              <span className="button-label">Actualizar dashboard</span>
+            </button>
+          </div>
         </div>
 
         <div className="dashboard-home-meta" aria-label="Resumen del dashboard">
-          <span>Boards visibles</span>
-          <strong>{countFormatter.format(boardCount)}</strong>
-          <span>Accede, renombra o elimina sin ruido permanente.</span>
+          <p className="dashboard-meta-label">Workspace visible</p>
+          <strong>{countFormatter.format(boardCount)} boards</strong>
+          <p>Abre, renombra o elimina boards con acciones secundarias discretas y contexto siempre visible.</p>
         </div>
       </header>
-
-      <div className="dashboard-actions-row">
-        <button className="primary-button" onClick={() => setIsCreatePanelOpen((current) => !current)} type="button">
-          {isCreatePanelOpen ? "Ocultar formulario" : "Crear board"}
-        </button>
-        <button className="secondary-button" onClick={() => void loadBoards()} type="button">
-          Actualizar dashboard
-        </button>
-      </div>
 
       {isCreatePanelOpen || state.status === "empty" ? (
         <section className="section-card dashboard-create-panel" aria-labelledby="dashboard-create-heading">
@@ -295,7 +299,8 @@ export const HomeRoute = () => {
             </label>
             <div className="dashboard-actions-row">
               <button className="primary-button" disabled={pendingBoardAction !== null} type="submit">
-                {pendingBoardAction?.type === "create" ? "Creando…" : "Crear board"}
+                <PlusIcon className="button-icon" />
+                <span className="button-label">{pendingBoardAction?.type === "create" ? "Creando…" : "Crear board"}</span>
               </button>
               {state.status !== "empty" ? (
                 <button className="tertiary-button" onClick={() => setIsCreatePanelOpen(false)} type="button">
@@ -335,7 +340,8 @@ export const HomeRoute = () => {
           <p>{state.message}</p>
           <div className="dashboard-state-actions">
             <button className="primary-button" onClick={() => void loadBoards()} type="button">
-              Reintentar
+              <RefreshIcon className="button-icon" />
+              <span className="button-label">Reintentar</span>
             </button>
           </div>
         </section>
@@ -356,23 +362,30 @@ export const HomeRoute = () => {
 
             return (
               <article className="board-summary-card" key={board.id} role="listitem">
-                <Link className="board-summary-link" to={`/boards/${board.id}`}>
-                  <div className="board-summary-copy">
-                    <p className="board-summary-eyebrow">/{board.id}</p>
-                    <h3 className="board-summary-title">{board.title}</h3>
-                    <p className="board-summary-description">
-                      Abre el tablero para editar columnas, tarjetas y orden desde el workspace.
-                    </p>
-                  </div>
-                  <p className="board-summary-metrics" aria-label={formatBoardMetrics(board)}>
-                    <span>{countFormatter.format(board.columnCount)} columnas</span>
-                    <span>{countFormatter.format(board.cardCount)} tarjetas</span>
+                <div className="board-summary-copy">
+                  <p className="board-summary-eyebrow">Board activo</p>
+                  <h3 className="board-summary-title">{board.title}</h3>
+                  <p className="board-summary-description">
+                    Abre el workspace para editar columnas, tarjetas y orden sin salir del flujo del tablero.
                   </p>
-                </Link>
+                  <p className="board-summary-id">ID de soporte: {board.id}</p>
+                </div>
+
+                <p className="board-summary-metrics" aria-label={formatBoardMetrics(board)}>
+                  <span>
+                    <BoardIcon className="metric-icon" />
+                    {countFormatter.format(board.columnCount)} columnas
+                  </span>
+                  <span>
+                    <CardIcon className="metric-icon" />
+                    {countFormatter.format(board.cardCount)} tarjetas
+                  </span>
+                </p>
 
                 <div className="dashboard-board-actions" aria-label={`Acciones para ${board.title}`}>
                   <Link className="route-link" to={`/boards/${board.id}`}>
-                    Abrir board
+                    <ArrowRightIcon className="button-icon" />
+                    <span className="button-label">Abrir board</span>
                   </Link>
                   <ActionMenu label={`Acciones secundarias para ${board.title}`}>
                     <button
@@ -382,7 +395,8 @@ export const HomeRoute = () => {
                       role="menuitem"
                       type="button"
                     >
-                      {isUpdating ? "Guardando…" : "Renombrar"}
+                      <PencilIcon className="button-icon" />
+                      <span className="button-label">{isUpdating ? "Guardando…" : "Renombrar"}</span>
                     </button>
                     <button
                       className="board-action-button board-action-button-danger"
@@ -391,7 +405,8 @@ export const HomeRoute = () => {
                       role="menuitem"
                       type="button"
                     >
-                      {isDeleting ? "Eliminando…" : "Eliminar"}
+                      <TrashIcon className="button-icon" />
+                      <span className="button-label">{isDeleting ? "Eliminando…" : "Eliminar"}</span>
                     </button>
                   </ActionMenu>
                 </div>
@@ -466,7 +481,10 @@ export const HomeRoute = () => {
               onClick={() => void handleDeleteBoard()}
               type="button"
             >
-              {dialogState?.type === "delete" && pendingBoardAction?.type === "delete" ? "Eliminando…" : "Eliminar board"}
+              <TrashIcon className="button-icon" />
+              <span className="button-label">
+                {dialogState?.type === "delete" && pendingBoardAction?.type === "delete" ? "Eliminando…" : "Eliminar board"}
+              </span>
             </button>
           </div>
         </div>

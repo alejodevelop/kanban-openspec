@@ -1,6 +1,7 @@
 import { type FormEvent } from "react";
 
 import { Dialog } from "../../components/ui/dialog";
+import { TrashIcon } from "../../components/ui/icons";
 
 type RenameDialogProps = {
   errorMessage: string | null;
@@ -102,7 +103,8 @@ export const ConfirmDeleteDialog = ({
             Cancelar
           </button>
           <button className="board-action-button board-action-button-danger" disabled={isPending} onClick={onConfirm} type="button">
-            {isPending ? "Eliminando…" : "Eliminar"}
+            <TrashIcon className="button-icon" />
+            <span className="button-label">{isPending ? "Eliminando…" : "Eliminar"}</span>
           </button>
         </div>
       </div>

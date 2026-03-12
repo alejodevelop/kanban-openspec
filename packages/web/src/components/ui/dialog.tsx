@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, type MouseEvent, type ReactNode } from "react";
 
+import { MoreHorizontalIcon } from "./icons";
+
 type DialogProps = {
   actions?: ReactNode;
   children: ReactNode;
@@ -67,8 +69,9 @@ export const Dialog = ({ actions, children, description, onClose, open, title }:
             <h2 id={titleId}>{title}</h2>
             {description === undefined ? null : <p id={descriptionId}>{description}</p>}
           </div>
-          <button aria-label="Cerrar dialogo" className="tertiary-button" onClick={onClose} type="button">
-            Cerrar
+          <button aria-label="Cerrar dialogo" className="icon-button" onClick={onClose} type="button">
+            <MoreHorizontalIcon className="button-icon" style={{ transform: "rotate(45deg)" }} />
+            <span className="visually-hidden">Cerrar</span>
           </button>
         </div>
         <div className="dialog-body">{children}</div>

@@ -1,8 +1,4 @@
-## Purpose
-
-Definir el dashboard inicial del frontend en `/` para listar los boards disponibles, comunicar sus estados principales y permitir entrar a cada tablero desde una vista resumida.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Mostrar dashboard inicial con boards disponibles
 El sistema SHALL usar la ruta inicial del frontend para mostrar un dashboard operativo de boards con una cabecera unica que concentre el contexto principal, el conteo disponible y la accion primaria de creacion.
@@ -10,21 +6,6 @@ El sistema SHALL usar la ruta inicial del frontend para mostrar un dashboard ope
 #### Scenario: Dashboard con boards
 - **WHEN** la ruta `/` carga y la API devuelve boards disponibles
 - **THEN** la interfaz muestra una cabecera unica de dashboard y un listado de boards con jerarquia visual orientada a trabajo operativo
-
-### Requirement: Comunicar estados de carga, error y vacio
-El sistema SHALL representar los estados principales del dashboard con copy clara, jerarquia visual consistente y proximos pasos accionables cuando corresponda.
-
-#### Scenario: Carga en progreso
-- **WHEN** la ruta `/` inicia la consulta del listado y la respuesta aun no llega
-- **THEN** la interfaz muestra un estado de carga identificable y coherente con la shell, sin aparentar una pantalla rota o incompleta
-
-#### Scenario: Error al consultar el listado
-- **WHEN** la consulta del dashboard falla por red o servidor
-- **THEN** la interfaz muestra un mensaje de error comprensible con una accion de recuperacion o reintento visible
-
-#### Scenario: Sin boards disponibles
-- **WHEN** la API responde una lista vacia
-- **THEN** la interfaz muestra un estado vacio especifico con una invitacion clara a crear el primer board
 
 ### Requirement: Permitir entrar a un board desde el dashboard
 El sistema SHALL ofrecer una navegacion directa desde cada board listado hacia su vista detallada existente, destacando una accion principal visible para abrir el workspace.
@@ -40,6 +21,8 @@ El sistema SHALL presentar para cada board listado el titulo y los metadatos de 
 - **WHEN** el dashboard renderiza un board listado
 - **THEN** la interfaz muestra al menos el total de columnas y el total de tarjetas asociado a ese board en una card escaneable y profesional
 
+## ADDED Requirements
+
 ### Requirement: Tratar acciones de mantenimiento como secundarias
 El sistema SHALL mantener las acciones de renombrar y eliminar boards accesibles desde el dashboard, pero con una jerarquia visual secundaria respecto de abrir el board y crear uno nuevo.
 
@@ -53,17 +36,3 @@ El sistema SHALL evitar mostrar el `boardId` como dato primario en cada board ca
 #### Scenario: Identificador tecnico no dominante
 - **WHEN** la persona usuaria escanea el listado de boards
 - **THEN** el titulo, los conteos y la accion principal aparecen antes que cualquier identificador tecnico visible
-
-### Requirement: Contextualizar acciones de gestion por board
-El sistema SHALL mantener disponibles las acciones de renombrar y eliminar boards desde el dashboard mediante patrones contextuales y accesibles que reduzcan el ruido visual cuando la persona usuaria solo quiere explorar o abrir un tablero.
-
-#### Scenario: Acciones secundarias disponibles sin saturar la tarjeta
-- **WHEN** la persona usuaria enfoca, selecciona o abre el menu de acciones de un board listado
-- **THEN** la interfaz expone las acciones de gestion correspondientes sin obligar a mostrar todos los botones secundarios de forma permanente
-
-### Requirement: Manejar titulos y contenido variable en las tarjetas de board
-El sistema SHALL manejar boards con nombres cortos, normales o largos sin romper el layout del dashboard ni volver ambiguas las acciones principales.
-
-#### Scenario: Board con titulo largo
-- **WHEN** un board listado tiene un titulo significativamente mas largo que el promedio
-- **THEN** la interfaz conserva legibilidad, evita overflow roto y mantiene accesible la accion para abrirlo o gestionarlo

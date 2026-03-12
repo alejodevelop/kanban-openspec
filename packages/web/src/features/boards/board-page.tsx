@@ -21,6 +21,7 @@ import {
 } from "react";
 import { Link } from "react-router-dom";
 
+import { ArrowLeftIcon, ArrowRightIcon, BoardIcon, CardIcon, PlusIcon, RefreshIcon } from "../../components/ui/icons";
 import { ApiClientError } from "../../lib/api-client";
 import {
   boardApi,
@@ -689,7 +690,8 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
         <p>El `boardId` ya no existe o la URL no apunta a un tablero valido.</p>
         <div className="board-status-actions">
           <Link className="primary-button" to="/">
-            Volver al dashboard
+            <ArrowLeftIcon className="button-icon" />
+            <span className="button-label">Volver al dashboard</span>
           </Link>
         </div>
       </section>
@@ -703,10 +705,12 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
         <p>{state.message}</p>
         <div className="board-status-actions">
           <button className="primary-button" onClick={() => void loadBoard(boardId)} type="button">
-            Reintentar
+            <RefreshIcon className="button-icon" />
+            <span className="button-label">Reintentar</span>
           </button>
           <Link className="secondary-button" to="/">
-            Volver al dashboard
+            <ArrowLeftIcon className="button-icon" />
+            <span className="button-label">Volver al dashboard</span>
           </Link>
         </div>
       </section>
@@ -716,16 +720,41 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
   return (
     <section className="board-page">
       <header className="board-header">
-        <Link className="board-breadcrumb" to="/">
-          ← Volver al dashboard
-        </Link>
         <div className="board-header-main">
           <div className="board-header-copy">
+            <Link className="board-breadcrumb" to="/">
+              <ArrowLeftIcon className="button-icon" />
+              <span className="button-label">Volver al dashboard</span>
+            </Link>
             <p className="board-kicker">Board Workspace</p>
             <h2>{state.board.title}</h2>
-            <p className="board-meta">
-              /boards/{state.board.id} · {state.board.columns.length} columnas
+            <p className="board-header-summary">
+              Supervisa el flujo, crea columnas donde hacen falta y reordena el trabajo sin perder el contexto del tablero.
             </p>
+            <div className="board-header-meta-row">
+              <span className="board-chip">
+                <BoardIcon className="metric-icon" />
+                {state.board.columns.length} columnas
+              </span>
+              <span className="board-chip">
+                <CardIcon className="metric-icon" />
+                {state.board.columns.reduce((total, column) => total + column.cards.length, 0)} tarjetas
+              </span>
+              <span className="board-meta">ID de soporte: {state.board.id}</span>
+            </div>
+          </div>
+
+          <div className="board-toolbar-actions">
+            {isColumnComposerOpen ? null : (
+              <button className="primary-button" onClick={() => setIsColumnComposerOpen(true)} type="button">
+                <PlusIcon className="button-icon" />
+                <span className="button-label">Nueva columna</span>
+              </button>
+            )}
+            <button className="secondary-button" onClick={() => void loadBoard(boardId)} type="button">
+              <RefreshIcon className="button-icon" />
+              <span className="button-label">Actualizar board</span>
+            </button>
           </div>
         </div>
       </header>
@@ -816,6 +845,18 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
                   resolveCreateCardErrorMessage={getCreateCardErrorMessage}
                 />
               ))}
+              <button
+                className="board-column-create-tile"
+                onClick={() => setIsColumnComposerOpen(true)}
+                type="button"
+              >
+                <PlusIcon className="button-icon" />
+                <span className="board-column-create-copy">
+                  <strong>Nueva columna</strong>
+                  <span>Agrega otra etapa al rail del tablero.</span>
+                </span>
+                <ArrowRightIcon className="button-icon" />
+              </button>
             </div>
           </SortableContext>
 

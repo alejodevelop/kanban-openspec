@@ -11,6 +11,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 
 import { ActionMenu } from "../../components/ui/action-menu";
+import { ArrowLeftIcon, ArrowRightIcon, CardIcon, GripIcon, PencilIcon, PlusIcon, TrashIcon } from "../../components/ui/icons";
 import type { BoardCard, BoardColumn, BoardView, CreateCardPayload, CreateColumnPayload } from "./board-api";
 import {
   getCardDragData,
@@ -122,7 +123,8 @@ export const BoardColumnComposer = ({
   if (!isOpen) {
     return (
       <button className="primary-button" onClick={onOpen} type="button">
-        Nueva columna
+        <PlusIcon className="button-icon" />
+        <span className="button-label">Nueva columna</span>
       </button>
     );
   }
@@ -156,7 +158,8 @@ export const BoardColumnComposer = ({
             Cancelar
           </button>
           <button className="primary-button" disabled={isSubmitting} type="submit">
-            {isSubmitting ? "Guardando…" : "Crear columna"}
+            <PlusIcon className="button-icon" />
+            <span className="button-label">{isSubmitting ? "Guardando…" : "Crear columna"}</span>
           </button>
         </div>
       </form>
@@ -202,7 +205,8 @@ const BoardCardComposer = ({
     <div className="board-column-footer">
       {!isOpen ? (
         <button className="secondary-button" onClick={onOpen} type="button">
-          Agregar tarjeta
+          <PlusIcon className="button-icon" />
+          <span className="button-label">Agregar tarjeta</span>
         </button>
       ) : (
         <form className="card-composer" onSubmit={handleSubmit}>
@@ -242,7 +246,8 @@ const BoardCardComposer = ({
               Cancelar
             </button>
             <button className="card-composer-submit" disabled={isSubmitting} type="submit">
-              {isSubmitting ? "Guardando…" : "Crear tarjeta"}
+              <PlusIcon className="button-icon" />
+              <span className="button-label">{isSubmitting ? "Guardando…" : "Crear tarjeta"}</span>
             </button>
           </div>
         </form>
@@ -292,7 +297,8 @@ const BoardCardItem = ({
             {...attributes}
             {...listeners}
           >
-            Mover
+            <GripIcon className="drag-icon" />
+            <span className="visually-hidden">Mover</span>
           </button>
           <p className="card-title">{card.title}</p>
         </div>
@@ -303,7 +309,8 @@ const BoardCardItem = ({
         <span className="board-card-meta">Tarjeta {cardIndex + 1}</span>
         <ActionMenu label={`Acciones para ${card.title}`}>
           <button className="board-action-button" onClick={() => onEdit(card)} role="menuitem" type="button">
-            Editar
+            <PencilIcon className="button-icon" />
+            <span className="button-label">Editar</span>
           </button>
           <button
             className="board-action-button board-action-button-danger"
@@ -311,7 +318,8 @@ const BoardCardItem = ({
             role="menuitem"
             type="button"
           >
-            Eliminar
+            <TrashIcon className="button-icon" />
+            <span className="button-label">Eliminar</span>
           </button>
           <button
             aria-label={`Subir ${card.title}`}
@@ -321,7 +329,8 @@ const BoardCardItem = ({
             role="menuitem"
             type="button"
           >
-            Subir
+            <ArrowLeftIcon className="button-icon" style={{ transform: "rotate(90deg)" }} />
+            <span className="button-label">Subir</span>
           </button>
           <button
             aria-label={`Bajar ${card.title}`}
@@ -331,7 +340,8 @@ const BoardCardItem = ({
             role="menuitem"
             type="button"
           >
-            Bajar
+            <ArrowRightIcon className="button-icon" style={{ transform: "rotate(90deg)" }} />
+            <span className="button-label">Bajar</span>
           </button>
           <button
             aria-label={`Mover ${card.title} a ${board.columns[columnIndex - 1]?.title ?? "la columna anterior"}`}
@@ -341,7 +351,8 @@ const BoardCardItem = ({
             role="menuitem"
             type="button"
           >
-            A la izquierda
+            <ArrowLeftIcon className="button-icon" />
+            <span className="button-label">A la izquierda</span>
           </button>
           <button
             aria-label={`Mover ${card.title} a ${board.columns[columnIndex + 1]?.title ?? "la columna siguiente"}`}
@@ -351,7 +362,8 @@ const BoardCardItem = ({
             role="menuitem"
             type="button"
           >
-            A la derecha
+            <ArrowRightIcon className="button-icon" />
+            <span className="button-label">A la derecha</span>
           </button>
         </ActionMenu>
       </div>
@@ -413,11 +425,15 @@ export const BoardColumnItem = ({
               {...attributes}
               {...listeners}
             >
-              Mover
+              <GripIcon className="drag-icon" />
+              <span className="visually-hidden">Mover</span>
             </button>
             <h3>{column.title}</h3>
           </div>
-          <span className="board-column-meta">{column.cards.length} tarjetas visibles</span>
+          <span className="board-column-meta">
+            <CardIcon className="metric-icon" />
+            {column.cards.length} tarjetas visibles
+          </span>
         </div>
 
         <div className="board-column-actions">
@@ -430,7 +446,8 @@ export const BoardColumnItem = ({
               role="menuitem"
               type="button"
             >
-              A la izquierda
+              <ArrowLeftIcon className="button-icon" />
+              <span className="button-label">A la izquierda</span>
             </button>
             <button
               aria-label={`Mover ${column.title} a la derecha`}
@@ -442,7 +459,8 @@ export const BoardColumnItem = ({
               role="menuitem"
               type="button"
             >
-              A la derecha
+              <ArrowRightIcon className="button-icon" />
+              <span className="button-label">A la derecha</span>
             </button>
             <button
               className="board-action-button"
@@ -451,7 +469,8 @@ export const BoardColumnItem = ({
               role="menuitem"
               type="button"
             >
-              Renombrar
+              <PencilIcon className="button-icon" />
+              <span className="button-label">Renombrar</span>
             </button>
             <button
               className="board-action-button board-action-button-danger"
@@ -460,7 +479,8 @@ export const BoardColumnItem = ({
               role="menuitem"
               type="button"
             >
-              Eliminar
+              <TrashIcon className="button-icon" />
+              <span className="button-label">Eliminar</span>
             </button>
           </ActionMenu>
         </div>
@@ -508,10 +528,16 @@ export const ColumnOverlay = ({ column }: { column: BoardColumn }) => (
     <header className="board-column-header">
       <div className="board-column-heading">
         <div className="board-column-title-row">
-          <span className="drag-handle drag-handle-static">Mover</span>
+          <span className="drag-handle drag-handle-static">
+            <GripIcon className="drag-icon" />
+            <span className="visually-hidden">Mover</span>
+          </span>
           <h3>{column.title}</h3>
         </div>
-        <span className="board-column-meta">{column.cards.length} tarjetas visibles</span>
+        <span className="board-column-meta">
+          <CardIcon className="metric-icon" />
+          {column.cards.length} tarjetas visibles
+        </span>
       </div>
     </header>
   </article>
@@ -521,7 +547,10 @@ export const CardOverlay = ({ card }: { card: BoardCard }) => (
   <div className="card-item card-item-overlay">
     <div className="card-item-body">
       <div className="card-item-topline">
-        <span className="drag-handle drag-handle-static">Mover</span>
+        <span className="drag-handle drag-handle-static">
+          <GripIcon className="drag-icon" />
+          <span className="visually-hidden">Mover</span>
+        </span>
         <p className="card-title">{card.title}</p>
       </div>
       {card.description === null ? null : <p className="card-description">{card.description}</p>}

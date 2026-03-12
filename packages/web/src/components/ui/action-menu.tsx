@@ -1,5 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
+import { MoreHorizontalIcon } from "./icons";
+
 type ActionMenuProps = {
   children: ReactNode;
   label: string;
@@ -45,7 +47,8 @@ export const ActionMenu = ({ children, label }: ActionMenuProps) => {
         onClick={() => setIsOpen((current) => !current)}
         type="button"
       >
-        Mas
+        <MoreHorizontalIcon className="button-icon" />
+        <span className="button-label">Mas</span>
       </button>
       {isOpen ? (
         <div aria-label={label} className="action-menu-panel" id={menuId} role="menu">
