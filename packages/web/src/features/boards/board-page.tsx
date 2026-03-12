@@ -3,9 +3,11 @@ import { startTransition, useEffect, useEffectEvent, useState, type FormEvent } 
 import { ApiClientError } from "../../lib/api-client";
 import {
   boardApi,
+  type BoardCard,
   type BoardView,
   type CreateCardPayload,
   type ReorderCardsColumnPayload,
+  type UpdateCardPayload,
 } from "./board-api";
 
 type BoardPageProps = {
@@ -23,6 +25,17 @@ type CardComposerProps = {
   columnId: string;
   columnTitle: string;
   onCreate: (columnId: string, payload: CreateCardPayload) => Promise<void>;
+};
+
+type EditCardState = {
+  cardId: string;
+  title: string;
+  description: string;
+};
+
+type PendingCardAction = {
+  cardId: string;
+  type: "edit" | "delete";
 };
 
 const resolveBoardState = (board: BoardView): BoardPageState => {
@@ -52,6 +65,57 @@ const getReorderErrorMessage = (error: unknown): string => {
 
   return "No pudimos guardar el nuevo orden. Intenta de nuevo.";
 };
+
+const getEditErrorMessage = (error: unknown): string => {
+  if (error instanceof ApiClientError && error.status === 400) {
+    return "Ingresa un titulo valido para editar la tarjeta.";
+  }
+
+  if (error instanceof ApiClientError && error.status === 404) {
+    return "La tarjeta ya no existe. Recarga el tablero.";
+  }
+
+  return "No pudimos guardar los cambios de la tarjeta. Intenta de nuevo.";
+};
+
+const getDeleteErrorMessage = (error: unknown): string => {
+  if (error instanceof ApiClientError && error.status === 404) {
+    return "La tarjeta ya no existe. Recarga el tablero.";
+  }
+
+  return "No pudimos eliminar la tarjeta. Intenta de nuevo.";
+};
+
+const updateCardInBoard = (board: BoardView, updatedCard: BoardCard & { columnId: string }): BoardView => ({
+  ...board,
+  columns: board.columns.map((column) => {
+    if (column.id !== updatedCard.columnId) {
+      return column;
+    }
+
+    return {
+      ...column,
+      cards: column.cards.map((card) => (card.id === updatedCard.id ? { ...card, ...updatedCard } : card)),
+    };
+  }),
+});
+
+const removeCardFromBoard = (board: BoardView, cardId: string): BoardView => ({
+  ...board,
+  columns: board.columns.map((column) => {
+    const nextCards = column.cards.filter((card) => card.id !== cardId);
+
+    return nextCards.length === column.cards.length
+      ? column
+      : {
+          ...column,
+          cards: nextCards.map((card, index) => ({
+            ...card,
+            position: index,
+          })),
+        };
+  }),
+});
 
 const swapItems = <T,>(items: T[], fromIndex: number, toIndex: number): T[] => {
   const nextItems = items.slice();
@@ -129,6 +193,9 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
   const [state, setState] = useState<BoardPageState>({ status: "loading" });
   const [isReordering, setIsReordering] = useState(false);
   const [reorderErrorMessage, setReorderErrorMessage] = useState<string | null>(null);
+  const [editingCard, setEditingCard] = useState<EditCardState | null>(null);
+  const [pendingCardAction, setPendingCardAction] = useState<PendingCardAction | null>(null);
+  const [cardActionError, setCardActionError] = useState<{ cardId: string; message: string } | null>(null);
 
   const applyBoardState = useEffectEvent((board: BoardView) => {
     startTransition(() => {
@@ -162,6 +229,18 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
     }
   });
 
+  const applyLocalBoardChange = useEffectEvent((updateBoard: (board: BoardView) => BoardView) => {
+    startTransition(() => {
+      setState((current) => {
+        if (current.status !== "ready" && current.status !== "empty") {
+          return current;
+        }
+
+        return resolveBoardState(updateBoard(current.board));
+      });
+    });
+  });
+
   useEffect(() => {
     void loadBoard(boardId);
   }, [boardId]);
@@ -169,6 +248,69 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
   const handleCreateCard = async (columnId: string, payload: CreateCardPayload) => {
     await boardApi.createCard(columnId, payload);
     await loadBoard(boardId);
+  };
+
+  const handleStartEditCard = (card: BoardCard) => {
+    setCardActionError(null);
+    setEditingCard({
+      cardId: card.id,
+      title: card.title,
+      description: card.description ?? "",
+    });
+  };
+
+  const handleEditCard = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (editingCard === null) {
+      return;
+    }
+
+    const payload: UpdateCardPayload = {
+      title: editingCard.title,
+      description: editingCard.description,
+    };
+
+    setPendingCardAction({ cardId: editingCard.cardId, type: "edit" });
+    setCardActionError(null);
+
+    try {
+      const updatedCard = await boardApi.updateCard(editingCard.cardId, payload);
+      applyLocalBoardChange((board) => updateCardInBoard(board, updatedCard));
+      setEditingCard(null);
+    } catch (error) {
+      setCardActionError({
+        cardId: editingCard.cardId,
+        message: getEditErrorMessage(error),
+      });
+    } finally {
+      setPendingCardAction(null);
+    }
+  };
+
+  const handleDeleteCard = async (card: BoardCard) => {
+    const shouldDelete = window.confirm(`Eliminar \"${card.title}\"? Esta accion no se puede deshacer.`);
+    if (!shouldDelete) {
+      return;
+    }
+
+    setPendingCardAction({ cardId: card.id, type: "delete" });
+    setCardActionError(null);
+
+    try {
+      await boardApi.deleteCard(card.id);
+      applyLocalBoardChange((board) => removeCardFromBoard(board, card.id));
+      if (editingCard?.cardId === card.id) {
+        setEditingCard(null);
+      }
+    } catch (error) {
+      setCardActionError({
+        cardId: card.id,
+        message: getDeleteErrorMessage(error),
+      });
+    } finally {
+      setPendingCardAction(null);
+    }
   };
 
   const runReorder = useEffectEvent(async (reorderOperation: () => Promise<BoardView>) => {
@@ -355,55 +497,151 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
                         <p className="card-description">{card.description}</p>
                       )}
                     </div>
-                    <div className="card-actions">
-                      <button
-                        aria-label={`Subir ${card.title}`}
-                        className="board-action-button"
-                        disabled={isReordering || cardIndex === 0}
-                        onClick={() => handleMoveCardWithinColumn(columnIndex, cardIndex, -1)}
-                        type="button"
-                      >
+                     <div className="card-actions">
+                       <button
+                         aria-label={`Editar ${card.title}`}
+                         className="board-action-button"
+                         disabled={pendingCardAction !== null}
+                         onClick={() => handleStartEditCard(card)}
+                         type="button"
+                       >
+                         {pendingCardAction?.cardId === card.id && pendingCardAction.type === "edit"
+                           ? "Guardando..."
+                           : "Editar"}
+                       </button>
+                       <button
+                         aria-label={`Eliminar ${card.title}`}
+                         className="board-action-button board-action-button-danger"
+                         disabled={pendingCardAction !== null}
+                         onClick={() => void handleDeleteCard(card)}
+                         type="button"
+                       >
+                         {pendingCardAction?.cardId === card.id && pendingCardAction.type === "delete"
+                           ? "Eliminando..."
+                           : "Eliminar"}
+                       </button>
+                       <button
+                         aria-label={`Subir ${card.title}`}
+                         className="board-action-button"
+                         disabled={isReordering || pendingCardAction !== null || cardIndex === 0}
+                         onClick={() => handleMoveCardWithinColumn(columnIndex, cardIndex, -1)}
+                         type="button"
+                       >
                         Subir
                       </button>
-                      <button
-                        aria-label={`Bajar ${card.title}`}
-                        className="board-action-button"
-                        disabled={isReordering || cardIndex === column.cards.length - 1}
-                        onClick={() => handleMoveCardWithinColumn(columnIndex, cardIndex, 1)}
-                        type="button"
-                      >
+                       <button
+                         aria-label={`Bajar ${card.title}`}
+                         className="board-action-button"
+                         disabled={
+                           isReordering ||
+                           pendingCardAction !== null ||
+                           cardIndex === column.cards.length - 1
+                         }
+                         onClick={() => handleMoveCardWithinColumn(columnIndex, cardIndex, 1)}
+                         type="button"
+                       >
                         Bajar
                       </button>
-                      <button
+                       <button
                         aria-label={`Mover ${card.title} a ${
                           board.columns[columnIndex - 1]?.title ?? "la columna anterior"
                         }`}
-                        className="board-action-button"
-                        disabled={isReordering || columnIndex === 0}
-                        onClick={() => handleMoveCardAcrossColumns(columnIndex, cardIndex, -1)}
-                        type="button"
-                      >
+                         className="board-action-button"
+                         disabled={isReordering || pendingCardAction !== null || columnIndex === 0}
+                         onClick={() => handleMoveCardAcrossColumns(columnIndex, cardIndex, -1)}
+                         type="button"
+                       >
                         Izq
                       </button>
-                      <button
+                       <button
                         aria-label={`Mover ${card.title} a ${
                           board.columns[columnIndex + 1]?.title ?? "la columna siguiente"
                         }`}
-                        className="board-action-button"
-                        disabled={isReordering || columnIndex === board.columns.length - 1}
-                        onClick={() => handleMoveCardAcrossColumns(columnIndex, cardIndex, 1)}
-                        type="button"
-                      >
-                        Der
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                         className="board-action-button"
+                         disabled={
+                           isReordering ||
+                           pendingCardAction !== null ||
+                           columnIndex === board.columns.length - 1
+                         }
+                         onClick={() => handleMoveCardAcrossColumns(columnIndex, cardIndex, 1)}
+                         type="button"
+                       >
+                         Der
+                       </button>
+                     </div>
+                     {cardActionError?.cardId === card.id ? (
+                       <p className="board-feedback board-feedback-error" role="alert">
+                         {cardActionError.message}
+                       </p>
+                     ) : null}
+                   </li>
+                 ))}
               </ol>
 
               <CardComposer columnId={column.id} columnTitle={column.title} onCreate={handleCreateCard} />
             </article>
           ))}
+        </div>
+      )}
+      {editingCard === null ? null : (
+        <div className="board-modal-backdrop" role="presentation">
+          <div aria-modal="true" className="board-modal" role="dialog" aria-label="Editar tarjeta">
+            <form className="board-modal-form" onSubmit={handleEditCard}>
+              <div className="board-modal-header">
+                <div>
+                  <p className="board-kicker">Editar tarjeta</p>
+                  <h3>Actualiza el contenido visible del tablero</h3>
+                </div>
+                <button
+                  className="board-action-button"
+                  disabled={pendingCardAction?.type === "edit"}
+                  onClick={() => setEditingCard(null)}
+                  type="button"
+                >
+                  Cerrar
+                </button>
+              </div>
+              <label className="card-composer-label">
+                <span>Titulo</span>
+                <input
+                  aria-label="Titulo de la tarjeta"
+                  className="card-composer-input"
+                  name="title"
+                  onChange={(event) =>
+                    setEditingCard((current) =>
+                      current === null ? current : { ...current, title: event.target.value },
+                    )
+                  }
+                  value={editingCard.title}
+                />
+              </label>
+              <label className="card-composer-label">
+                <span>Descripcion</span>
+                <textarea
+                  aria-label="Descripcion de la tarjeta"
+                  className="card-composer-textarea"
+                  name="description"
+                  onChange={(event) =>
+                    setEditingCard((current) =>
+                      current === null ? current : { ...current, description: event.target.value },
+                    )
+                  }
+                  rows={4}
+                  value={editingCard.description}
+                />
+              </label>
+              {cardActionError?.cardId === editingCard.cardId ? (
+                <p className="board-feedback board-feedback-error" role="alert">
+                  {cardActionError.message}
+                </p>
+              ) : null}
+              <div className="board-modal-actions">
+                <button className="card-composer-submit" disabled={pendingCardAction?.type === "edit"} type="submit">
+                  {pendingCardAction?.type === "edit" ? "Guardando..." : "Guardar cambios"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </section>

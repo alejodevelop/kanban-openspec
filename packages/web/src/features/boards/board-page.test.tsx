@@ -10,6 +10,8 @@ import type { BoardView, CreatedCard } from "./board-api";
 const boardApiMocks = vi.hoisted(() => ({
   getBoard: vi.fn(),
   createCard: vi.fn(),
+  updateCard: vi.fn(),
+  deleteCard: vi.fn(),
   reorderColumns: vi.fn(),
   reorderCards: vi.fn(),
 }));
@@ -33,23 +35,32 @@ const buildBoard = (columns: BoardView["columns"]): BoardView => ({
   columns,
 });
 
+const rejectUnexpectedMutations = () => {
+  boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
+  boardApiMocks.updateCard.mockRejectedValue(new Error("Unexpected updateCard call"));
+  boardApiMocks.deleteCard.mockRejectedValue(new Error("Unexpected deleteCard call"));
+  boardApiMocks.reorderColumns.mockRejectedValue(new Error("Unexpected reorderColumns call"));
+  boardApiMocks.reorderCards.mockRejectedValue(new Error("Unexpected reorderCards call"));
+};
+
 describe("BoardRoute", () => {
   beforeEach(() => {
     boardApiMocks.getBoard.mockReset();
     boardApiMocks.createCard.mockReset();
+    boardApiMocks.updateCard.mockReset();
+    boardApiMocks.deleteCard.mockReset();
     boardApiMocks.reorderColumns.mockReset();
     boardApiMocks.reorderCards.mockReset();
   });
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
   });
 
   it("shows a loading state while waiting for the API response", () => {
     boardApiMocks.getBoard.mockReturnValue(new Promise(() => {}));
-    boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
-    boardApiMocks.reorderColumns.mockRejectedValue(new Error("Unexpected reorderColumns call"));
-    boardApiMocks.reorderCards.mockRejectedValue(new Error("Unexpected reorderCards call"));
+    rejectUnexpectedMutations();
 
     renderBoardRoute();
 
@@ -94,9 +105,7 @@ describe("BoardRoute", () => {
         },
       ]),
     );
-    boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
-    boardApiMocks.reorderColumns.mockRejectedValue(new Error("Unexpected reorderColumns call"));
-    boardApiMocks.reorderCards.mockRejectedValue(new Error("Unexpected reorderCards call"));
+    rejectUnexpectedMutations();
 
     renderBoardRoute();
 
@@ -125,9 +134,7 @@ describe("BoardRoute", () => {
 
   it("shows an empty state when the board exists but has no columns", async () => {
     boardApiMocks.getBoard.mockResolvedValue(buildBoard([]));
-    boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
-    boardApiMocks.reorderColumns.mockRejectedValue(new Error("Unexpected reorderColumns call"));
-    boardApiMocks.reorderCards.mockRejectedValue(new Error("Unexpected reorderCards call"));
+    rejectUnexpectedMutations();
 
     renderBoardRoute();
 
@@ -140,9 +147,7 @@ describe("BoardRoute", () => {
     boardApiMocks.getBoard.mockRejectedValue(
       new ApiClientError("Request failed with status 404", 404, { error: "Board not found" }),
     );
-    boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
-    boardApiMocks.reorderColumns.mockRejectedValue(new Error("Unexpected reorderColumns call"));
-    boardApiMocks.reorderCards.mockRejectedValue(new Error("Unexpected reorderCards call"));
+    rejectUnexpectedMutations();
 
     renderBoardRoute();
 
@@ -154,9 +159,7 @@ describe("BoardRoute", () => {
     boardApiMocks.getBoard.mockRejectedValue(
       new ApiClientError("Request failed with status 500", 500, { error: "Internal Server Error" }),
     );
-    boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
-    boardApiMocks.reorderColumns.mockRejectedValue(new Error("Unexpected reorderColumns call"));
-    boardApiMocks.reorderCards.mockRejectedValue(new Error("Unexpected reorderCards call"));
+    rejectUnexpectedMutations();
 
     renderBoardRoute();
 
@@ -183,6 +186,8 @@ describe("BoardRoute", () => {
     ]);
 
     boardApiMocks.getBoard.mockImplementation(async () => structuredClone(boardState));
+    boardApiMocks.updateCard.mockRejectedValue(new Error("Unexpected updateCard call"));
+    boardApiMocks.deleteCard.mockRejectedValue(new Error("Unexpected deleteCard call"));
     boardApiMocks.reorderColumns.mockRejectedValue(new Error("Unexpected reorderColumns call"));
     boardApiMocks.reorderCards.mockRejectedValue(new Error("Unexpected reorderCards call"));
     boardApiMocks.createCard.mockImplementation(
@@ -268,6 +273,8 @@ describe("BoardRoute", () => {
 
     boardApiMocks.getBoard.mockImplementation(async () => structuredClone(boardState));
     boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
+    boardApiMocks.updateCard.mockRejectedValue(new Error("Unexpected updateCard call"));
+    boardApiMocks.deleteCard.mockRejectedValue(new Error("Unexpected deleteCard call"));
     boardApiMocks.reorderCards.mockRejectedValue(new Error("Unexpected reorderCards call"));
     boardApiMocks.reorderColumns.mockImplementation(async (_boardId: string, payload: { columnIds: string[] }) => {
       const columnsById = new Map(boardState.columns.map((column) => [column.id, column]));
@@ -344,6 +351,8 @@ describe("BoardRoute", () => {
 
     boardApiMocks.getBoard.mockImplementation(async () => structuredClone(boardState));
     boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
+    boardApiMocks.updateCard.mockRejectedValue(new Error("Unexpected updateCard call"));
+    boardApiMocks.deleteCard.mockRejectedValue(new Error("Unexpected deleteCard call"));
     boardApiMocks.reorderColumns.mockRejectedValue(new Error("Unexpected reorderColumns call"));
     boardApiMocks.reorderCards.mockImplementation(
       async (_boardId: string, payload: { columns: Array<{ columnId: string; cardIds: string[] }> }) => {
@@ -415,6 +424,8 @@ describe("BoardRoute", () => {
 
     boardApiMocks.getBoard.mockImplementation(async () => structuredClone(boardState));
     boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
+    boardApiMocks.updateCard.mockRejectedValue(new Error("Unexpected updateCard call"));
+    boardApiMocks.deleteCard.mockRejectedValue(new Error("Unexpected deleteCard call"));
     boardApiMocks.reorderColumns.mockRejectedValue(new Error("Unexpected reorderColumns call"));
     boardApiMocks.reorderCards.mockImplementation(
       async (_boardId: string, payload: { columns: Array<{ columnId: string; cardIds: string[] }> }) => {
@@ -482,5 +493,148 @@ describe("BoardRoute", () => {
 
       expect(within(doneColumn).getByText("Redactar alcance")).toBeTruthy();
     });
+  });
+
+  it("edits a created card without reloading the page", async () => {
+    const boardState: BoardView = buildBoard([
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        title: "Todo",
+        position: 0,
+        cards: [],
+      },
+    ]);
+
+    boardApiMocks.getBoard.mockImplementation(async () => structuredClone(boardState));
+    boardApiMocks.reorderColumns.mockRejectedValue(new Error("Unexpected reorderColumns call"));
+    boardApiMocks.reorderCards.mockRejectedValue(new Error("Unexpected reorderCards call"));
+    boardApiMocks.deleteCard.mockRejectedValue(new Error("Unexpected deleteCard call"));
+    boardApiMocks.createCard.mockImplementation(
+      async (columnId: string, payload: { title: string; description?: string }): Promise<CreatedCard> => {
+        const createdCard = {
+          id: "card-1",
+          columnId,
+          title: payload.title.trim(),
+          description: payload.description?.trim() ? payload.description.trim() : null,
+          position: 0,
+        };
+
+        boardState.columns[0]?.cards.push({
+          id: createdCard.id,
+          title: createdCard.title,
+          description: createdCard.description,
+          position: createdCard.position,
+        });
+
+        return createdCard;
+      },
+    );
+    boardApiMocks.updateCard.mockImplementation(
+      async (cardId: string, payload: { title: string; description?: string }): Promise<CreatedCard> => {
+        const firstColumn = boardState.columns[0];
+        if (firstColumn === undefined) {
+          throw new Error("Missing test column");
+        }
+
+        const card = firstColumn.cards.find((entry) => entry.id === cardId);
+        if (card === undefined) {
+          throw new Error("Missing test card");
+        }
+
+        card.title = payload.title.trim();
+        card.description = payload.description?.trim() ? payload.description.trim() : null;
+
+        return {
+          id: card.id,
+          columnId: firstColumn.id,
+          title: card.title,
+          description: card.description,
+          position: card.position,
+        };
+      },
+    );
+
+    const user = userEvent.setup();
+    renderBoardRoute();
+
+    expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
+
+    const todoColumn = screen.getByRole("heading", { name: /todo/i }).closest("article");
+    if (todoColumn === null) {
+      throw new Error("Expected Todo column article");
+    }
+
+    await user.type(within(todoColumn).getByLabelText(/titulo para todo/i), "Nueva tarjeta");
+    await user.type(within(todoColumn).getByLabelText(/descripcion para todo/i), "Borrador inicial");
+    await user.click(within(todoColumn).getByRole("button", { name: /crear tarjeta/i }));
+
+    expect(await screen.findByText("Borrador inicial")).toBeTruthy();
+    expect(boardApiMocks.getBoard).toHaveBeenCalledTimes(2);
+
+    await user.click(screen.getByRole("button", { name: /editar nueva tarjeta/i }));
+    await user.clear(screen.getByLabelText(/titulo de la tarjeta/i));
+    await user.type(screen.getByLabelText(/titulo de la tarjeta/i), "Tarjeta ajustada");
+    await user.clear(screen.getByLabelText(/descripcion de la tarjeta/i));
+    await user.type(
+      screen.getByLabelText(/descripcion de la tarjeta/i),
+      "Actualizada sin reload completo",
+    );
+    await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Tarjeta ajustada")).toBeTruthy();
+      expect(screen.getByText("Actualizada sin reload completo")).toBeTruthy();
+    });
+    expect(boardApiMocks.getBoard).toHaveBeenCalledTimes(2);
+  });
+
+  it("removes a deleted card from the board and keeps it absent after reloading", async () => {
+    const boardState: BoardView = buildBoard([
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        title: "Todo",
+        position: 0,
+        cards: [
+          {
+            id: "card-1",
+            title: "Tarjeta descartable",
+            description: "Se elimina con confirmacion",
+            position: 0,
+          },
+        ],
+      },
+    ]);
+
+    boardApiMocks.getBoard.mockImplementation(async () => structuredClone(boardState));
+    boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
+    boardApiMocks.updateCard.mockRejectedValue(new Error("Unexpected updateCard call"));
+    boardApiMocks.reorderColumns.mockRejectedValue(new Error("Unexpected reorderColumns call"));
+    boardApiMocks.reorderCards.mockRejectedValue(new Error("Unexpected reorderCards call"));
+    boardApiMocks.deleteCard.mockImplementation(async (cardId: string) => {
+      const firstColumn = boardState.columns[0];
+      if (firstColumn !== undefined) {
+        firstColumn.cards = firstColumn.cards.filter((card) => card.id !== cardId);
+      }
+    });
+
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    const user = userEvent.setup();
+    const firstRender = renderBoardRoute();
+
+    expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
+    expect(screen.getByText("Tarjeta descartable")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: /eliminar tarjeta descartable/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Tarjeta descartable")).toBeNull();
+    });
+
+    firstRender.unmount();
+    renderBoardRoute();
+
+    await screen.findByRole("heading", { name: /delivery board/i });
+    expect(screen.queryByText("Tarjeta descartable")).toBeNull();
   });
 });

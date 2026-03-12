@@ -71,6 +71,17 @@ export const createApiClient = ({ baseUrl, fetchImpl = fetch }: ApiClientOptions
           ...init.headers,
         },
       }),
+    patch: <T>(path: string, body: unknown, init: RequestInit = {}) =>
+      request<T>(path, {
+        ...init,
+        method: "PATCH",
+        body: JSON.stringify(body),
+        headers: {
+          "Content-Type": "application/json",
+          ...init.headers,
+        },
+      }),
+    delete: <T>(path: string, init: RequestInit = {}) => request<T>(path, { ...init, method: "DELETE" }),
   };
 };
 

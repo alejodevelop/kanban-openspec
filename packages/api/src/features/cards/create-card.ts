@@ -2,6 +2,7 @@ import { desc, eq } from "drizzle-orm";
 
 import type { DatabaseClient } from "../../db/client.ts";
 import { cards, columns } from "../../db/schema/index.ts";
+import { normalizeDescription, normalizeTitle } from "./card-fields.ts";
 
 type CardWriteSession = Pick<DatabaseClient["db"], "insert" | "select">;
 
@@ -59,32 +60,6 @@ export class ColumnNotFoundError extends Error {
     this.name = "ColumnNotFoundError";
   }
 }
-
-const normalizeTitle = (value: unknown): string => {
-  if (typeof value !== "string") {
-    throw new CreateCardValidationError("Title is required");
-  }
-
-  const normalized = value.trim();
-  if (normalized.length === 0) {
-    throw new CreateCardValidationError("Title is required");
-  }
-
-  return normalized;
-};
-
-const normalizeDescription = (value: unknown): string | null => {
-  if (value === undefined || value === null) {
-    return null;
-  }
-
-  if (typeof value !== "string") {
-    throw new CreateCardValidationError("Description must be a string when provided");
-  }
-
-  const normalized = value.trim();
-  return normalized === "" ? null : normalized;
-};
 
 const createRepositorySession = (db: CardWriteSession): CreateCardRepositorySession => ({
   findColumnById: async (columnId) => {
