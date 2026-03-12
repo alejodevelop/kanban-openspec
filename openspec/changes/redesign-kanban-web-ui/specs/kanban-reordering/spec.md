@@ -1,0 +1,25 @@
+## MODIFIED Requirements
+
+### Requirement: Ofrecer una alternativa accesible al drag and drop
+El sistema SHALL ofrecer una via accesible, claramente identificable y visualmente integrada para ejecutar reorder de columnas y tarjetas cuando la interaccion de drag and drop no pueda utilizarse, manteniendo el mismo resultado persistente que el flujo principal.
+
+#### Scenario: Reorder sin gesto de arrastre
+- **WHEN** la persona usuaria navega con teclado o una tecnologia asistiva que no ejecuta drag and drop
+- **THEN** la interfaz sigue permitiendo reordenar columnas y tarjetas y persiste el mismo resultado que el flujo principal
+
+#### Scenario: Descubrimiento de controles alternativos
+- **WHEN** la persona usuaria enfoca o activa el patron de acciones asociado a una columna o tarjeta reordenable
+- **THEN** la interfaz deja disponible una alternativa comprensible para mover el elemento sin depender solo del gesto de arrastre
+
+## ADDED Requirements
+
+### Requirement: Comunicar el estado del reorder durante la interaccion
+El sistema SHALL comunicar de forma visible y coherente cuando una operacion de reorder esta activa, cuando se confirma y cuando falla, tanto en drag and drop como en sus alternativas accesibles.
+
+#### Scenario: Feedback de reorder exitoso
+- **WHEN** la persona usuaria completa un reorder valido de columna o tarjeta
+- **THEN** la interfaz refleja el nuevo orden de inmediato y deja claro que el elemento fue reubicado en el contexto esperado
+
+#### Scenario: Fallo al persistir reorder
+- **WHEN** una operacion de reorder falla al persistirse
+- **THEN** la interfaz informa el error de forma comprensible y mantiene o restaura un estado consistente del tablero

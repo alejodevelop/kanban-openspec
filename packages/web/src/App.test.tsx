@@ -20,7 +20,8 @@ describe("App", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("heading", { name: /tableros listos para explorar y abrir/i })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /organiza boards con una experiencia mas clara/i })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /workspace kanban para equipos pequenos/i })).toBeTruthy();
     expect(screen.getByRole("heading", { name: /dashboard test double/i })).toBeTruthy();
     expect(screen.getByText("http://localhost:3001")).toBeTruthy();
   });

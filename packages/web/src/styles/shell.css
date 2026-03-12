@@ -1,0 +1,115 @@
+.app-shell {
+  display: grid;
+  gap: var(--space-6);
+  min-height: 100vh;
+  padding:
+    max(1rem, env(safe-area-inset-top))
+    max(1rem, env(safe-area-inset-right))
+    max(1.5rem, env(safe-area-inset-bottom))
+    max(1rem, env(safe-area-inset-left));
+}
+
+.app-header,
+.app-main {
+  width: min(1200px, 100%);
+  margin: 0 auto;
+}
+
+.app-header {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.app-header-home {
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 24rem);
+  align-items: end;
+}
+
+.app-header-board {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.app-brand {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.app-brand-link {
+  width: fit-content;
+  color: var(--color-ink-strong);
+  font-size: 1rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.app-intro,
+.app-context-card {
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-soft);
+  backdrop-filter: blur(10px);
+}
+
+.app-intro h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.2rem, 5vw, 4rem);
+  line-height: 0.95;
+}
+
+.app-intro p,
+.app-context-card p {
+  margin: var(--space-3) 0 0;
+  color: var(--color-ink);
+}
+
+.app-context-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.app-context-value {
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+.app-main {
+  min-width: 0;
+}
+
+.app-main-home {
+  display: grid;
+}
+
+.app-main-board {
+  display: grid;
+}
+
+.status-bar {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  width: fit-content;
+  margin: 0 auto;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: var(--shadow-soft);
+  color: var(--color-ink);
+}
+
+@media (max-width: 960px) {
+  .app-header-home,
+  .app-header-board {
+    grid-template-columns: 1fr;
+  }
+}

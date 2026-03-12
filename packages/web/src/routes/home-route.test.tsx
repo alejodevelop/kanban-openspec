@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -123,14 +123,7 @@ describe("HomeRoute", () => {
   });
 
   it("creates a board from the dashboard and refreshes the list", async () => {
-    boardApiMocks.listBoards.mockResolvedValueOnce([]).mockResolvedValueOnce([
-      {
-        id: "11111111-1111-4111-8111-111111111111",
-        title: "Delivery board",
-        columnCount: 0,
-        cardCount: 0,
-      },
-    ]);
+    boardApiMocks.listBoards.mockResolvedValueOnce([]);
     boardApiMocks.createBoard.mockResolvedValue({
       id: "11111111-1111-4111-8111-111111111111",
       title: "Delivery board",
@@ -141,8 +134,13 @@ describe("HomeRoute", () => {
 
     expect(await screen.findByRole("heading", { name: /todavia no hay boards/i })).toBeTruthy();
 
+    const createBoardForm = screen.getByLabelText(/titulo del nuevo board/i).closest("form");
+    if (createBoardForm === null) {
+      throw new Error("Expected create board form");
+    }
+
     await user.type(screen.getByLabelText(/titulo del nuevo board/i), "Delivery board");
-    await user.click(screen.getByRole("button", { name: /crear board/i }));
+    await user.click(within(createBoardForm).getByRole("button", { name: /crear board/i }));
 
     expect(boardApiMocks.createBoard).toHaveBeenCalledWith({ title: "Delivery board" });
     expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
@@ -156,29 +154,37 @@ describe("HomeRoute", () => {
         columnCount: 2,
         cardCount: 3,
       },
-    ]).mockResolvedValueOnce([
-      {
-        id: "11111111-1111-4111-8111-111111111111",
-        title: "Operations board",
-        columnCount: 2,
-        cardCount: 3,
-      },
     ]);
     boardApiMocks.updateBoard.mockResolvedValue({
       id: "11111111-1111-4111-8111-111111111111",
       title: "Operations board",
     });
-    vi.spyOn(window, "prompt").mockReturnValue("Operations board");
 
     const user = userEvent.setup();
     renderHomeRoute();
 
     expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: /renombrar/i }));
+    const boardCard = screen.getByRole("heading", { name: /delivery board/i }).closest("article");
+    if (boardCard === null) {
+      throw new Error("Expected board card article");
+    }
 
-    expect(boardApiMocks.updateBoard).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111", {
-      title: "Operations board",
+    await user.click(within(boardCard).getByRole("button", { name: /mas/i }));
+    await user.click(within(boardCard).getByRole("menuitem", { name: /renombrar/i }));
+
+    const renameDialog = await screen.findByRole("dialog", { name: /renombrar delivery board/i });
+    const titleField = within(renameDialog).getByLabelText(/titulo del board/i) as HTMLInputElement;
+    fireEvent.change(titleField, { target: { value: "Operations board" } });
+    await waitFor(() => {
+      expect(titleField.value).toBe("Operations board");
+    });
+    await user.click(within(renameDialog).getByRole("button", { name: /guardar cambios/i }));
+
+    await waitFor(() => {
+      expect(boardApiMocks.updateBoard).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111", {
+        title: "Operations board",
+      });
     });
     expect(await screen.findByRole("heading", { name: /operations board/i })).toBeTruthy();
   });
@@ -191,16 +197,22 @@ describe("HomeRoute", () => {
         columnCount: 2,
         cardCount: 3,
       },
-    ]).mockResolvedValueOnce([]);
+    ]);
     boardApiMocks.deleteBoard.mockResolvedValue(undefined);
-    vi.spyOn(window, "confirm").mockReturnValue(true);
 
     const user = userEvent.setup();
     renderHomeRoute();
 
     expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: /eliminar/i }));
+    const boardCard = screen.getByRole("heading", { name: /delivery board/i }).closest("article");
+    if (boardCard === null) {
+      throw new Error("Expected board card article");
+    }
+
+    await user.click(within(boardCard).getByRole("button", { name: /mas/i }));
+    await user.click(within(boardCard).getByRole("menuitem", { name: /^eliminar$/i }));
+    await user.click(screen.getByRole("button", { name: /eliminar board/i }));
 
     expect(boardApiMocks.deleteBoard).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111");
     expect(await screen.findByRole("heading", { name: /todavia no hay boards/i })).toBeTruthy();
@@ -217,8 +229,13 @@ describe("HomeRoute", () => {
 
     expect(await screen.findByRole("heading", { name: /todavia no hay boards/i })).toBeTruthy();
 
+    const createBoardForm = screen.getByLabelText(/titulo del nuevo board/i).closest("form");
+    if (createBoardForm === null) {
+      throw new Error("Expected create board form");
+    }
+
     await user.type(screen.getByLabelText(/titulo del nuevo board/i), "   ");
-    await user.click(screen.getByRole("button", { name: /crear board/i }));
+    await user.click(within(createBoardForm).getByRole("button", { name: /crear board/i }));
 
     expect(await screen.findByText(/ingresa un titulo valido para crear el board/i)).toBeTruthy();
   });

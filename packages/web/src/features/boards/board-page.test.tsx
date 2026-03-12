@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -74,7 +74,7 @@ describe("BoardRoute", () => {
     renderBoardRoute();
 
     expect(screen.getByRole("heading", { name: /cargando tablero/i })).toBeTruthy();
-    expect(screen.getByText(/consultando columnas y tarjetas desde la api/i)).toBeTruthy();
+    expect(screen.getByText(/preparando columnas, tarjetas y acciones contextuales/i)).toBeTruthy();
   });
 
   it("renders the nested board contract returned by the API", async () => {
@@ -149,7 +149,7 @@ describe("BoardRoute", () => {
 
     expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
     expect(screen.getByRole("heading", { name: /este tablero todavia no tiene columnas/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /crear columna/i })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /crear columna|nueva columna/i })).toBeTruthy();
     expect(screen.queryByRole("list", { name: /columnas del tablero/i })).toBeNull();
   });
 
@@ -162,7 +162,7 @@ describe("BoardRoute", () => {
     renderBoardRoute();
 
     expect(await screen.findByRole("heading", { name: /tablero no encontrado/i })).toBeTruthy();
-    expect(screen.getByText(/revisa el `boardid` de la ruta/i)).toBeTruthy();
+    expect(screen.getByText(/el `boardid` ya no existe/i)).toBeTruthy();
   });
 
   it("shows an error state when the board request fails", async () => {
@@ -236,6 +236,7 @@ describe("BoardRoute", () => {
       throw new Error("Expected Todo column article");
     }
 
+    await user.click(within(todoColumn).getByRole("button", { name: /agregar tarjeta/i }));
     await user.type(within(todoColumn).getByLabelText(/titulo para todo/i), "Nueva tarjeta");
     await user.type(
       within(todoColumn).getByLabelText(/descripcion para todo/i),
@@ -308,7 +309,13 @@ describe("BoardRoute", () => {
 
     expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: /mover todo a la derecha/i }));
+    const todoColumn = screen.getByRole("heading", { name: /todo/i }).closest("article");
+    if (todoColumn === null) {
+      throw new Error("Expected Todo column article");
+    }
+
+    await user.click(within(todoColumn).getByRole("button", { name: /mas/i }));
+    await user.click(within(todoColumn).getByRole("menuitem", { name: /mover todo a la derecha/i }));
 
     await waitFor(() => {
       const boardColumns = [
@@ -398,7 +405,13 @@ describe("BoardRoute", () => {
 
     expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: /bajar definir alcance/i }));
+    const firstCard = screen.getByText("Definir alcance").closest("li");
+    if (firstCard === null) {
+      throw new Error("Expected first card list item");
+    }
+
+    await user.click(within(firstCard).getByRole("button", { name: /mas/i }));
+    await user.click(within(firstCard).getByRole("menuitem", { name: /bajar definir alcance/i }));
 
     await waitFor(() => {
       const cardTitles = [...screen.getAllByText(/definir alcance|probar reorder/i)].map((element) =>
@@ -481,7 +494,13 @@ describe("BoardRoute", () => {
 
     expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: /mover redactar alcance a done/i }));
+    const cardItem = screen.getByText("Redactar alcance").closest("li");
+    if (cardItem === null) {
+      throw new Error("Expected card list item");
+    }
+
+    await user.click(within(cardItem).getByRole("button", { name: /mas/i }));
+    await user.click(within(cardItem).getByRole("menuitem", { name: /mover redactar alcance a done/i }));
 
     await waitFor(() => {
       const doneColumn = screen.getByRole("heading", { name: /done/i }).closest("article");
@@ -521,7 +540,13 @@ describe("BoardRoute", () => {
 
     expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: /mover todo a la derecha/i }));
+    const todoColumn = screen.getByRole("heading", { name: /todo/i }).closest("article");
+    if (todoColumn === null) {
+      throw new Error("Expected Todo column article");
+    }
+
+    await user.click(within(todoColumn).getByRole("button", { name: /mas/i }));
+    await user.click(within(todoColumn).getByRole("menuitem", { name: /mover todo a la derecha/i }));
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeTruthy();
@@ -605,28 +630,37 @@ describe("BoardRoute", () => {
       throw new Error("Expected Todo column article");
     }
 
+    await user.click(within(todoColumn).getByRole("button", { name: /agregar tarjeta/i }));
     await user.type(within(todoColumn).getByLabelText(/titulo para todo/i), "Nueva tarjeta");
     await user.type(within(todoColumn).getByLabelText(/descripcion para todo/i), "Borrador inicial");
     await user.click(within(todoColumn).getByRole("button", { name: /crear tarjeta/i }));
 
     expect(await screen.findByText("Borrador inicial")).toBeTruthy();
-    expect(boardApiMocks.getBoard).toHaveBeenCalledTimes(2);
+    expect(boardApiMocks.getBoard).toHaveBeenCalledTimes(1);
 
-    await user.click(screen.getByRole("button", { name: /editar nueva tarjeta/i }));
-    await user.clear(screen.getByLabelText(/titulo de la tarjeta/i));
-    await user.type(screen.getByLabelText(/titulo de la tarjeta/i), "Tarjeta ajustada");
-    await user.clear(screen.getByLabelText(/descripcion de la tarjeta/i));
-    await user.type(
-      screen.getByLabelText(/descripcion de la tarjeta/i),
-      "Actualizada sin reload completo",
-    );
-    await user.click(screen.getByRole("button", { name: /guardar cambios/i }));
+    const createdCard = screen.getByText("Nueva tarjeta").closest("li");
+    if (createdCard === null) {
+      throw new Error("Expected created card list item");
+    }
+
+    await user.click(within(createdCard).getByRole("button", { name: /mas/i }));
+    await user.click(within(createdCard).getByRole("menuitem", { name: /^editar$/i }));
+
+    const editDialog = await screen.findByRole("dialog", { name: /editar tarjeta/i });
+    const titleField = within(editDialog).getByLabelText(/titulo de la tarjeta/i) as HTMLInputElement;
+    const descriptionField = within(editDialog).getByRole("textbox", {
+      name: /descripcion de la tarjeta/i,
+    }) as HTMLTextAreaElement;
+
+    fireEvent.change(titleField, { target: { value: "Tarjeta ajustada" } });
+    fireEvent.change(descriptionField, { target: { value: "Actualizada sin reload completo" } });
+    await user.click(within(editDialog).getByRole("button", { name: /guardar cambios/i }));
 
     await waitFor(() => {
       expect(screen.getByText("Tarjeta ajustada")).toBeTruthy();
       expect(screen.getByText("Actualizada sin reload completo")).toBeTruthy();
     });
-    expect(boardApiMocks.getBoard).toHaveBeenCalledTimes(2);
+    expect(boardApiMocks.getBoard).toHaveBeenCalledTimes(1);
   });
 
   it("removes a deleted card from the board and keeps it absent after reloading", async () => {
@@ -658,15 +692,22 @@ describe("BoardRoute", () => {
       }
     });
 
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-
     const user = userEvent.setup();
     const firstRender = renderBoardRoute();
 
     expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
     expect(screen.getByText("Tarjeta descartable")).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: /eliminar tarjeta descartable/i }));
+    const disposableCard = screen.getByText("Tarjeta descartable").closest("li");
+    if (disposableCard === null) {
+      throw new Error("Expected disposable card list item");
+    }
+
+    await user.click(within(disposableCard).getByRole("button", { name: /mas/i }));
+    await user.click(within(disposableCard).getByRole("menuitem", { name: /^eliminar$/i }));
+
+    const deleteDialog = screen.getByRole("dialog", { name: /eliminar tarjeta descartable/i });
+    await user.click(within(deleteDialog).getByRole("button", { name: /^eliminar$/i }));
 
     await waitFor(() => {
       expect(screen.queryByText("Tarjeta descartable")).toBeNull();
@@ -711,6 +752,11 @@ describe("BoardRoute", () => {
 
     expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
 
+    const createColumnControl = await screen.findByRole("button", { name: /crear columna|nueva columna/i });
+    if (/nueva columna/i.test(createColumnControl.textContent ?? "")) {
+      await user.click(createColumnControl);
+    }
+
     await user.type(screen.getByLabelText(/titulo de la nueva columna/i), "Done");
     await user.click(screen.getByRole("button", { name: /crear columna/i }));
 
@@ -752,17 +798,31 @@ describe("BoardRoute", () => {
         position: column.position,
       };
     });
-    vi.spyOn(window, "prompt").mockReturnValue("Doing");
-
     const user = userEvent.setup();
     renderBoardRoute();
 
     expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: /renombrar columna todo/i }));
+    const todoColumn = screen.getByRole("heading", { name: /todo/i }).closest("article");
+    if (todoColumn === null) {
+      throw new Error("Expected Todo column article");
+    }
 
-    expect(boardApiMocks.updateColumn).toHaveBeenCalledWith("22222222-2222-4222-8222-222222222222", {
-      title: "Doing",
+    await user.click(within(todoColumn).getByRole("button", { name: /mas/i }));
+    await user.click(within(todoColumn).getByRole("menuitem", { name: /^renombrar$/i }));
+
+    const renameDialog = await screen.findByRole("dialog", { name: /renombrar todo/i });
+    const titleField = within(renameDialog).getByLabelText(/titulo de la columna/i) as HTMLInputElement;
+    fireEvent.change(titleField, { target: { value: "Doing" } });
+    await waitFor(() => {
+      expect(titleField.value).toBe("Doing");
+    });
+    await user.click(within(renameDialog).getByRole("button", { name: /guardar cambios/i }));
+
+    await waitFor(() => {
+      expect(boardApiMocks.updateColumn).toHaveBeenCalledWith("22222222-2222-4222-8222-222222222222", {
+        title: "Doing",
+      });
     });
     expect(await screen.findByRole("heading", { name: /doing/i })).toBeTruthy();
   });
@@ -789,14 +849,21 @@ describe("BoardRoute", () => {
       boardState.columns = boardState.columns.filter((column) => column.id !== columnId);
       return { boardId: boardState.id };
     });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-
     const user = userEvent.setup();
     renderBoardRoute();
 
     expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: /eliminar columna todo/i }));
+    const todoColumn = screen.getByRole("heading", { name: /todo/i }).closest("article");
+    if (todoColumn === null) {
+      throw new Error("Expected Todo column article");
+    }
+
+    await user.click(within(todoColumn).getByRole("button", { name: /mas/i }));
+    await user.click(within(todoColumn).getByRole("menuitem", { name: /^eliminar$/i }));
+
+    const deleteDialog = screen.getByRole("dialog", { name: /eliminar todo/i });
+    await user.click(within(deleteDialog).getByRole("button", { name: /^eliminar$/i }));
 
     expect(boardApiMocks.deleteColumn).toHaveBeenCalledWith("22222222-2222-4222-8222-222222222222");
     expect(await screen.findByRole("heading", { name: /este tablero todavia no tiene columnas/i })).toBeTruthy();
