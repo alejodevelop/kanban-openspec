@@ -1,6 +1,7 @@
 import express from "express";
 
 import { type GetBoardUseCase } from "./features/boards/get-board.ts";
+import { type ListBoardsUseCase } from "./features/boards/list-boards.ts";
 import { type ReorderColumnsUseCase } from "./features/boards/reorder-columns.ts";
 import { type CreateCardUseCase } from "./features/cards/create-card.ts";
 import { type ReorderCardsUseCase } from "./features/cards/reorder-cards.ts";
@@ -10,6 +11,7 @@ import { createColumnsRouter } from "./routes/columns.ts";
 
 type AppOptions = {
   checkDatabase?: HealthCheck;
+  listBoards?: ListBoardsUseCase;
   getBoard?: GetBoardUseCase;
   createCard?: CreateCardUseCase;
   reorderColumns?: ReorderColumnsUseCase;
@@ -18,6 +20,7 @@ type AppOptions = {
 
 export const createApp = ({
   checkDatabase,
+  listBoards,
   getBoard,
   createCard,
   reorderColumns,
@@ -40,7 +43,7 @@ export const createApp = ({
   });
   app.use(express.json());
   app.use("/health", createHealthRouter({ checkDatabase }));
-  app.use("/api/boards", createBoardsRouter({ getBoard, reorderColumns, reorderCards }));
+  app.use("/api/boards", createBoardsRouter({ listBoards, getBoard, reorderColumns, reorderCards }));
   app.use("/api/columns", createColumnsRouter({ createCard }));
 
   return app;

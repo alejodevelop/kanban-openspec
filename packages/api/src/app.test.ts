@@ -12,6 +12,7 @@ import {
 import { ReorderColumnsValidationError } from "./features/boards/reorder-columns.ts";
 import { ReorderCardsValidationError } from "./features/cards/reorder-cards.ts";
 import type { BoardView } from "./features/boards/get-board.ts";
+import type { BoardSummary } from "./features/boards/list-boards.ts";
 
 const VALID_BOARD_ID = "11111111-1111-4111-8111-111111111111";
 const VALID_COLUMN_ID = "22222222-2222-4222-8222-222222222222";
@@ -108,6 +109,55 @@ describe("app business routes", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("access-control-allow-origin")).toBe("*");
     await expect(response.json()).resolves.toEqual(board);
+  });
+
+  it("returns the board collection with summary counts", async () => {
+    const boards: BoardSummary[] = [
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        title: "Alpha board",
+        columnCount: 0,
+        cardCount: 0,
+      },
+      {
+        id: VALID_BOARD_ID,
+        title: "Delivery board",
+        columnCount: 2,
+        cardCount: 3,
+      },
+    ];
+
+    const app = createApp({
+      listBoards: async () => boards,
+      getBoard: async () => null,
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/boards`);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(boards);
+  });
+
+  it("returns an empty collection when no boards exist", async () => {
+    const app = createApp({
+      listBoards: async () => [],
+      getBoard: async () => null,
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/boards`);
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual([]);
   });
 
   it("returns not found when the requested board does not exist", async () => {

@@ -14,7 +14,7 @@
 - `packages/api/src/server.ts` es el entrypoint del backend.
 - `packages/api/src/app.ts` compone la aplicacion Express y registra las rutas.
 - El backend esta organizado por features, no por MVC:
-  - `features/boards/` para lectura y reorder de boards/columnas.
+  - `features/boards/` para listado, lectura y reorder de boards/columnas.
   - `features/cards/` para creacion y reorder de cards.
   - `routes/` para adaptadores HTTP.
   - `db/` para cliente y schema de Drizzle.
@@ -28,10 +28,12 @@
 ## Estado funcional actual
 
 - `GET /health` verifica runtime y conectividad a PostgreSQL.
+- `GET /api/boards` devuelve el listado de boards con `columnCount` y `cardCount`.
 - `GET /api/boards/:boardId` devuelve un board con columnas y tarjetas ordenadas.
 - `POST /api/columns/:columnId/cards` crea una tarjeta.
 - `POST /api/boards/:boardId/columns/reorder` reordena columnas.
 - `POST /api/boards/:boardId/cards/reorder` reordena tarjetas dentro de una o varias columnas.
+- La web soporta `/` como dashboard inicial para listar boards y navegar a su detalle.
 - La web soporta `/boards/:boardId` para cargar el tablero, crear tarjetas y persistir reorder.
 
 ## Entorno

@@ -1,8 +1,12 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 
 import { App } from "./App";
+
+vi.mock("./routes/app-routes", () => ({
+  AppRoutes: () => <section><h2>Dashboard test double</h2></section>,
+}));
 
 describe("App", () => {
   afterEach(() => {
@@ -16,8 +20,8 @@ describe("App", () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole("heading", { name: /frontend listo para conectar el tablero/i })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: /shell base operativa/i })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /tableros listos para explorar y abrir/i })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /dashboard test double/i })).toBeTruthy();
     expect(screen.getByText("http://localhost:3001")).toBeTruthy();
   });
 });

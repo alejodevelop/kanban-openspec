@@ -116,6 +116,93 @@ code {
   color: #f7efe1;
 }
 
+.dashboard-home {
+  display: grid;
+  gap: 1.5rem;
+  padding: 2rem;
+}
+
+.dashboard-home-header {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.dashboard-home-header h2 {
+  margin: 0.35rem 0 0;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+}
+
+.dashboard-home-copy {
+  max-width: 36rem;
+  margin: 0;
+  color: #42506f;
+}
+
+.board-summary-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.board-summary-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 1.25rem;
+  border: 1px solid rgba(31, 35, 51, 0.08);
+  border-radius: 1.25rem;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(241, 246, 255, 0.92)),
+    rgba(255, 255, 255, 0.9);
+  box-shadow: 0 16px 40px rgba(31, 35, 51, 0.08);
+}
+
+.board-summary-copy {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.board-summary-copy h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.board-summary-eyebrow {
+  margin: 0;
+  color: #5b6781;
+  font-size: 0.82rem;
+}
+
+.board-summary-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0.1rem 0 0;
+  color: #42506f;
+  font-weight: 600;
+}
+
+.dashboard-state {
+  padding: 2rem;
+}
+
+.dashboard-state h2 {
+  margin: 0;
+}
+
+.dashboard-state p {
+  margin: 0.75rem 0 0;
+  color: #42506f;
+}
+
+.dashboard-state-empty {
+  color: #8a4a00;
+}
+
+.dashboard-state-error {
+  color: #8d1f1f;
+}
+
 .board-page {
   display: grid;
   gap: 1.5rem;
@@ -364,6 +451,15 @@ code {
 
   .route-card {
     padding: 1.25rem;
+  }
+
+  .dashboard-home {
+    padding: 1.25rem;
+  }
+
+  .board-summary-card {
+    align-items: start;
+    flex-direction: column;
   }
 
   .board-page {

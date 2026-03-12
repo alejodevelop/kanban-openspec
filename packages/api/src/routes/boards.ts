@@ -8,6 +8,11 @@ import {
   type GetBoardUseCase,
 } from "../features/boards/get-board.ts";
 import {
+  createBoardListRepository,
+  createListBoardsUseCase,
+  type ListBoardsUseCase,
+} from "../features/boards/list-boards.ts";
+import {
   createReorderColumnsRepository,
   createReorderColumnsUseCase,
   ReorderColumnsValidationError,
@@ -22,10 +27,14 @@ import {
 import { isUuid } from "../lib/is-uuid.ts";
 
 type BoardsRouterOptions = {
+  listBoards?: ListBoardsUseCase;
   getBoard?: GetBoardUseCase;
   reorderColumns?: ReorderColumnsUseCase;
   reorderCards?: ReorderCardsUseCase;
 };
+
+const createDefaultListBoards = (): ListBoardsUseCase =>
+  createListBoardsUseCase(createBoardListRepository(getDatabaseClient().db));
 
 const createDefaultGetBoard = (): GetBoardUseCase =>
   createGetBoardUseCase(createBoardReadRepository(getDatabaseClient().db));
@@ -66,6 +75,21 @@ export const createGetBoardHandler = ({
     } catch {
       response.status(500).json({
         error: "Unable to load board",
+      });
+    }
+  };
+};
+
+export const createListBoardsHandler = ({
+  listBoards = createDefaultListBoards(),
+}: BoardsRouterOptions = {}): RequestHandler => {
+  return async (_request, response) => {
+    try {
+      const boards = await listBoards();
+      response.status(200).json(boards);
+    } catch {
+      response.status(500).json({
+        error: "Unable to list boards",
       });
     }
   };
@@ -180,12 +204,14 @@ export const createReorderCardsHandler = ({
 };
 
 export const createBoardsRouter = ({
+  listBoards,
   getBoard,
   reorderColumns,
   reorderCards,
 }: BoardsRouterOptions = {}) => {
   const router = Router();
 
+  router.get("/", createListBoardsHandler({ listBoards }));
   router.get("/:boardId", createGetBoardHandler({ getBoard }));
   router.post(
     "/:boardId/columns/reorder",

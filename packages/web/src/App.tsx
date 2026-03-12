@@ -6,10 +6,10 @@ export const App = () => {
     <div className="app-shell">
       <header className="hero">
         <p className="eyebrow">Kanban OpenSpec</p>
-        <h1>Frontend listo para conectar el tablero.</h1>
+        <h1>Tableros listos para explorar y abrir.</h1>
         <p className="hero-copy">
-          Este bootstrap deja el navegador, el routing y el cliente HTTP preparados para los
-          siguientes changes sin mezclar todavia logica de negocio.
+          La entrada principal muestra el catalogo de boards y conserva la vista detallada para
+          seguir el flujo de trabajo completo.
         </p>
       </header>
 

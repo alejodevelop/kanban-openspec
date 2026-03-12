@@ -20,6 +20,13 @@ export type BoardView = {
   columns: BoardColumn[];
 };
 
+export type BoardSummary = {
+  id: string;
+  title: string;
+  columnCount: number;
+  cardCount: number;
+};
+
 export type CreateCardPayload = {
   title: string;
   description?: string;
@@ -47,6 +54,7 @@ export type CreatedCard = {
 };
 
 export const boardApi = {
+  listBoards: async () => await apiClient.get<BoardSummary[]>("/api/boards"),
   getBoard: async (boardId: string) => await apiClient.get<BoardView>(`/api/boards/${boardId}`),
   createCard: async (columnId: string, payload: CreateCardPayload) =>
     await apiClient.post<CreatedCard>(`/api/columns/${columnId}/cards`, payload),
