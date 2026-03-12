@@ -9,6 +9,9 @@ import type { BoardView, CreatedCard } from "./board-api";
 
 const boardApiMocks = vi.hoisted(() => ({
   getBoard: vi.fn(),
+  createColumn: vi.fn(),
+  updateColumn: vi.fn(),
+  deleteColumn: vi.fn(),
   createCard: vi.fn(),
   updateCard: vi.fn(),
   deleteCard: vi.fn(),
@@ -36,6 +39,9 @@ const buildBoard = (columns: BoardView["columns"]): BoardView => ({
 });
 
 const rejectUnexpectedMutations = () => {
+  boardApiMocks.createColumn.mockRejectedValue(new Error("Unexpected createColumn call"));
+  boardApiMocks.updateColumn.mockRejectedValue(new Error("Unexpected updateColumn call"));
+  boardApiMocks.deleteColumn.mockRejectedValue(new Error("Unexpected deleteColumn call"));
   boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
   boardApiMocks.updateCard.mockRejectedValue(new Error("Unexpected updateCard call"));
   boardApiMocks.deleteCard.mockRejectedValue(new Error("Unexpected deleteCard call"));
@@ -46,6 +52,9 @@ const rejectUnexpectedMutations = () => {
 describe("BoardRoute", () => {
   beforeEach(() => {
     boardApiMocks.getBoard.mockReset();
+    boardApiMocks.createColumn.mockReset();
+    boardApiMocks.updateColumn.mockReset();
+    boardApiMocks.deleteColumn.mockReset();
     boardApiMocks.createCard.mockReset();
     boardApiMocks.updateCard.mockReset();
     boardApiMocks.deleteCard.mockReset();
@@ -140,6 +149,7 @@ describe("BoardRoute", () => {
 
     expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
     expect(screen.getByRole("heading", { name: /este tablero todavia no tiene columnas/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /crear columna/i })).toBeTruthy();
     expect(screen.queryByRole("list", { name: /columnas del tablero/i })).toBeNull();
   });
 
@@ -667,5 +677,154 @@ describe("BoardRoute", () => {
 
     await screen.findByRole("heading", { name: /delivery board/i });
     expect(screen.queryByText("Tarjeta descartable")).toBeNull();
+  });
+
+  it("creates a column from the board view and reloads the board", async () => {
+    const boardState: BoardView = buildBoard([]);
+
+    boardApiMocks.getBoard.mockImplementation(async () => structuredClone(boardState));
+    boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
+    boardApiMocks.updateCard.mockRejectedValue(new Error("Unexpected updateCard call"));
+    boardApiMocks.deleteCard.mockRejectedValue(new Error("Unexpected deleteCard call"));
+    boardApiMocks.reorderColumns.mockRejectedValue(new Error("Unexpected reorderColumns call"));
+    boardApiMocks.reorderCards.mockRejectedValue(new Error("Unexpected reorderCards call"));
+    boardApiMocks.updateColumn.mockRejectedValue(new Error("Unexpected updateColumn call"));
+    boardApiMocks.deleteColumn.mockRejectedValue(new Error("Unexpected deleteColumn call"));
+    boardApiMocks.createColumn.mockImplementation(async (_boardId: string, payload: { title: string }) => {
+      boardState.columns.push({
+        id: "column-1",
+        title: payload.title.trim(),
+        position: 0,
+        cards: [],
+      });
+
+      return {
+        id: "column-1",
+        boardId: boardState.id,
+        title: payload.title.trim(),
+        position: 0,
+      };
+    });
+
+    const user = userEvent.setup();
+    renderBoardRoute();
+
+    expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
+
+    await user.type(screen.getByLabelText(/titulo de la nueva columna/i), "Done");
+    await user.click(screen.getByRole("button", { name: /crear columna/i }));
+
+    expect(boardApiMocks.createColumn).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111", {
+      title: "Done",
+    });
+    expect(await screen.findByRole("heading", { name: /done/i })).toBeTruthy();
+  });
+
+  it("renames a column from the board view", async () => {
+    const boardState: BoardView = buildBoard([
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        title: "Todo",
+        position: 0,
+        cards: [],
+      },
+    ]);
+
+    boardApiMocks.getBoard.mockImplementation(async () => structuredClone(boardState));
+    boardApiMocks.createColumn.mockRejectedValue(new Error("Unexpected createColumn call"));
+    boardApiMocks.deleteColumn.mockRejectedValue(new Error("Unexpected deleteColumn call"));
+    boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
+    boardApiMocks.updateCard.mockRejectedValue(new Error("Unexpected updateCard call"));
+    boardApiMocks.deleteCard.mockRejectedValue(new Error("Unexpected deleteCard call"));
+    boardApiMocks.reorderColumns.mockRejectedValue(new Error("Unexpected reorderColumns call"));
+    boardApiMocks.reorderCards.mockRejectedValue(new Error("Unexpected reorderCards call"));
+    boardApiMocks.updateColumn.mockImplementation(async (columnId: string, payload: { title: string }) => {
+      const column = boardState.columns.find((entry) => entry.id === columnId);
+      if (column === undefined) {
+        throw new Error("Missing test column");
+      }
+
+      column.title = payload.title.trim();
+      return {
+        id: column.id,
+        boardId: boardState.id,
+        title: column.title,
+        position: column.position,
+      };
+    });
+    vi.spyOn(window, "prompt").mockReturnValue("Doing");
+
+    const user = userEvent.setup();
+    renderBoardRoute();
+
+    expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: /renombrar columna todo/i }));
+
+    expect(boardApiMocks.updateColumn).toHaveBeenCalledWith("22222222-2222-4222-8222-222222222222", {
+      title: "Doing",
+    });
+    expect(await screen.findByRole("heading", { name: /doing/i })).toBeTruthy();
+  });
+
+  it("deletes a column from the board view after confirmation", async () => {
+    const boardState: BoardView = buildBoard([
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        title: "Todo",
+        position: 0,
+        cards: [],
+      },
+    ]);
+
+    boardApiMocks.getBoard.mockImplementation(async () => structuredClone(boardState));
+    boardApiMocks.createColumn.mockRejectedValue(new Error("Unexpected createColumn call"));
+    boardApiMocks.updateColumn.mockRejectedValue(new Error("Unexpected updateColumn call"));
+    boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
+    boardApiMocks.updateCard.mockRejectedValue(new Error("Unexpected updateCard call"));
+    boardApiMocks.deleteCard.mockRejectedValue(new Error("Unexpected deleteCard call"));
+    boardApiMocks.reorderColumns.mockRejectedValue(new Error("Unexpected reorderColumns call"));
+    boardApiMocks.reorderCards.mockRejectedValue(new Error("Unexpected reorderCards call"));
+    boardApiMocks.deleteColumn.mockImplementation(async (columnId: string) => {
+      boardState.columns = boardState.columns.filter((column) => column.id !== columnId);
+      return { boardId: boardState.id };
+    });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    const user = userEvent.setup();
+    renderBoardRoute();
+
+    expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: /eliminar columna todo/i }));
+
+    expect(boardApiMocks.deleteColumn).toHaveBeenCalledWith("22222222-2222-4222-8222-222222222222");
+    expect(await screen.findByRole("heading", { name: /este tablero todavia no tiene columnas/i })).toBeTruthy();
+  });
+
+  it("shows a validation message when creating a column fails", async () => {
+    const boardState: BoardView = buildBoard([]);
+
+    boardApiMocks.getBoard.mockImplementation(async () => structuredClone(boardState));
+    boardApiMocks.createColumn.mockRejectedValue(
+      new ApiClientError("Request failed with status 400", 400, { error: "Title is required" }),
+    );
+    boardApiMocks.updateColumn.mockRejectedValue(new Error("Unexpected updateColumn call"));
+    boardApiMocks.deleteColumn.mockRejectedValue(new Error("Unexpected deleteColumn call"));
+    boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
+    boardApiMocks.updateCard.mockRejectedValue(new Error("Unexpected updateCard call"));
+    boardApiMocks.deleteCard.mockRejectedValue(new Error("Unexpected deleteCard call"));
+    boardApiMocks.reorderColumns.mockRejectedValue(new Error("Unexpected reorderColumns call"));
+    boardApiMocks.reorderCards.mockRejectedValue(new Error("Unexpected reorderCards call"));
+
+    const user = userEvent.setup();
+    renderBoardRoute();
+
+    expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
+
+    await user.type(screen.getByLabelText(/titulo de la nueva columna/i), "   ");
+    await user.click(screen.getByRole("button", { name: /crear columna/i }));
+
+    expect(await screen.findByText(/ingresa un titulo valido para crear la columna/i)).toBeTruthy();
   });
 });

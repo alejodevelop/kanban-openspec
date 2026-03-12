@@ -8,6 +8,9 @@ import { ApiClientError } from "../lib/api-client";
 
 const boardApiMocks = vi.hoisted(() => ({
   listBoards: vi.fn(),
+  createBoard: vi.fn(),
+  updateBoard: vi.fn(),
+  deleteBoard: vi.fn(),
   getBoard: vi.fn(),
   createCard: vi.fn(),
   reorderColumns: vi.fn(),
@@ -31,6 +34,9 @@ const renderHomeRoute = () =>
 describe("HomeRoute", () => {
   beforeEach(() => {
     boardApiMocks.listBoards.mockReset();
+    boardApiMocks.createBoard.mockReset();
+    boardApiMocks.updateBoard.mockReset();
+    boardApiMocks.deleteBoard.mockReset();
     boardApiMocks.getBoard.mockReset();
     boardApiMocks.createCard.mockReset();
     boardApiMocks.reorderColumns.mockReset();
@@ -68,7 +74,7 @@ describe("HomeRoute", () => {
 
     renderHomeRoute();
 
-    expect(await screen.findByRole("heading", { name: /elige un tablero para continuar/i })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: /alpha board/i })).toBeTruthy();
 
     const boardList = screen.getByRole("list", { name: /boards disponibles/i });
     expect(within(boardList).getByRole("heading", { name: /alpha board/i })).toBeTruthy();
@@ -83,7 +89,7 @@ describe("HomeRoute", () => {
     renderHomeRoute();
 
     expect(await screen.findByRole("heading", { name: /todavia no hay boards/i })).toBeTruthy();
-    expect(screen.getByText(/carga datos de prueba en la api/i)).toBeTruthy();
+    expect(screen.getByText(/crea el primer board desde este dashboard/i)).toBeTruthy();
   });
 
   it("shows an error state when the board list request fails", async () => {
@@ -114,5 +120,106 @@ describe("HomeRoute", () => {
     await user.click(await screen.findByRole("link", { name: /abrir board/i }));
 
     expect(await screen.findByText("Board detail route")).toBeTruthy();
+  });
+
+  it("creates a board from the dashboard and refreshes the list", async () => {
+    boardApiMocks.listBoards.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        title: "Delivery board",
+        columnCount: 0,
+        cardCount: 0,
+      },
+    ]);
+    boardApiMocks.createBoard.mockResolvedValue({
+      id: "11111111-1111-4111-8111-111111111111",
+      title: "Delivery board",
+    });
+
+    const user = userEvent.setup();
+    renderHomeRoute();
+
+    expect(await screen.findByRole("heading", { name: /todavia no hay boards/i })).toBeTruthy();
+
+    await user.type(screen.getByLabelText(/titulo del nuevo board/i), "Delivery board");
+    await user.click(screen.getByRole("button", { name: /crear board/i }));
+
+    expect(boardApiMocks.createBoard).toHaveBeenCalledWith({ title: "Delivery board" });
+    expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
+  });
+
+  it("renames a board from the dashboard", async () => {
+    boardApiMocks.listBoards.mockResolvedValueOnce([
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        title: "Delivery board",
+        columnCount: 2,
+        cardCount: 3,
+      },
+    ]).mockResolvedValueOnce([
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        title: "Operations board",
+        columnCount: 2,
+        cardCount: 3,
+      },
+    ]);
+    boardApiMocks.updateBoard.mockResolvedValue({
+      id: "11111111-1111-4111-8111-111111111111",
+      title: "Operations board",
+    });
+    vi.spyOn(window, "prompt").mockReturnValue("Operations board");
+
+    const user = userEvent.setup();
+    renderHomeRoute();
+
+    expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: /renombrar/i }));
+
+    expect(boardApiMocks.updateBoard).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111", {
+      title: "Operations board",
+    });
+    expect(await screen.findByRole("heading", { name: /operations board/i })).toBeTruthy();
+  });
+
+  it("deletes a board from the dashboard after confirmation", async () => {
+    boardApiMocks.listBoards.mockResolvedValueOnce([
+      {
+        id: "11111111-1111-4111-8111-111111111111",
+        title: "Delivery board",
+        columnCount: 2,
+        cardCount: 3,
+      },
+    ]).mockResolvedValueOnce([]);
+    boardApiMocks.deleteBoard.mockResolvedValue(undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    const user = userEvent.setup();
+    renderHomeRoute();
+
+    expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: /eliminar/i }));
+
+    expect(boardApiMocks.deleteBoard).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111");
+    expect(await screen.findByRole("heading", { name: /todavia no hay boards/i })).toBeTruthy();
+  });
+
+  it("shows an inline error when board creation fails validation", async () => {
+    boardApiMocks.listBoards.mockResolvedValue([]);
+    boardApiMocks.createBoard.mockRejectedValue(
+      new ApiClientError("Request failed with status 400", 400, { error: "Title is required" }),
+    );
+
+    const user = userEvent.setup();
+    renderHomeRoute();
+
+    expect(await screen.findByRole("heading", { name: /todavia no hay boards/i })).toBeTruthy();
+
+    await user.type(screen.getByLabelText(/titulo del nuevo board/i), "   ");
+    await user.click(screen.getByRole("button", { name: /crear board/i }));
+
+    expect(await screen.findByText(/ingresa un titulo valido para crear el board/i)).toBeTruthy();
   });
 });

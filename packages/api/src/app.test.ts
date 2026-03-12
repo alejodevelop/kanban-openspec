@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { createApp } from "./app.ts";
 import { BoardNotFoundError } from "./features/boards/board-errors.ts";
+import { CreateBoardValidationError, type ManagedBoard } from "./features/boards/create-board.ts";
 import {
-  ColumnNotFoundError,
   CreateCardValidationError,
   type CreatedCard,
 } from "./features/cards/create-card.ts";
@@ -15,6 +15,12 @@ import { ReorderColumnsValidationError } from "./features/boards/reorder-columns
 import { ReorderCardsValidationError } from "./features/cards/reorder-cards.ts";
 import type { BoardView } from "./features/boards/get-board.ts";
 import type { BoardSummary } from "./features/boards/list-boards.ts";
+import { type DeletedColumn } from "./features/columns/delete-column.ts";
+import {
+  CreateColumnValidationError,
+  type ManagedColumn,
+} from "./features/columns/create-column.ts";
+import { ColumnNotFoundError } from "./features/columns/column-errors.ts";
 
 const VALID_BOARD_ID = "11111111-1111-4111-8111-111111111111";
 const VALID_COLUMN_ID = "22222222-2222-4222-8222-222222222222";
@@ -161,6 +167,145 @@ describe("app business routes", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual([]);
+  });
+
+  it("creates a board through the boards collection endpoint", async () => {
+    const createdBoard: ManagedBoard = {
+      id: VALID_BOARD_ID,
+      title: "Delivery board",
+    };
+    const app = createApp({
+      createBoard: async ({ title }) => ({
+        ...createdBoard,
+        title: String(title).trim(),
+      }),
+      getBoard: async () => null,
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/boards`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "  Delivery board  ",
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual(createdBoard);
+  });
+
+  it("returns a client error when board creation validation fails", async () => {
+    const app = createApp({
+      createBoard: async () => {
+        throw new CreateBoardValidationError("Title is required");
+      },
+      getBoard: async () => null,
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/boards`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "   ",
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Title is required",
+    });
+  });
+
+  it("updates a board through the board endpoint", async () => {
+    const app = createApp({
+      updateBoard: async ({ boardId, title }) => ({
+        id: boardId,
+        title: String(title).trim(),
+      }),
+      getBoard: async () => null,
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/boards/${VALID_BOARD_ID}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "  Delivery board renamed  ",
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      id: VALID_BOARD_ID,
+      title: "Delivery board renamed",
+    });
+  });
+
+  it("returns not found when updating a missing board", async () => {
+    const app = createApp({
+      updateBoard: async ({ boardId }) => {
+        throw new BoardNotFoundError(boardId);
+      },
+      getBoard: async () => null,
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/boards/${VALID_BOARD_ID}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "Nuevo titulo",
+      }),
+    });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "Board not found",
+    });
+  });
+
+  it("deletes a board through the board endpoint", async () => {
+    const app = createApp({
+      deleteBoard: async () => undefined,
+      getBoard: async () => null,
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/boards/${VALID_BOARD_ID}`, {
+      method: "DELETE",
+    });
+
+    expect(response.status).toBe(204);
   });
 
   it("returns not found when the requested board does not exist", async () => {
@@ -313,6 +458,156 @@ describe("app business routes", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Column not found",
     });
+  });
+
+  it("creates a column through the board column endpoint", async () => {
+    const createdColumn: ManagedColumn = {
+      id: VALID_COLUMN_ID,
+      boardId: VALID_BOARD_ID,
+      title: "Done",
+      position: 2,
+    };
+    const app = createApp({
+      createColumn: async ({ boardId, title }) => ({
+        ...createdColumn,
+        boardId,
+        title: String(title).trim(),
+      }),
+      getBoard: async () => null,
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/boards/${VALID_BOARD_ID}/columns`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "  Done  ",
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual(createdColumn);
+  });
+
+  it("returns not found when creating a column on a missing board", async () => {
+    const app = createApp({
+      createColumn: async ({ boardId }) => {
+        throw new BoardNotFoundError(boardId);
+      },
+      getBoard: async () => null,
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/boards/${VALID_BOARD_ID}/columns`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "Done",
+      }),
+    });
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "Board not found",
+    });
+  });
+
+  it("updates a column through the column endpoint", async () => {
+    const app = createApp({
+      updateColumn: async ({ columnId, title }) => ({
+        id: columnId,
+        boardId: VALID_BOARD_ID,
+        title: String(title).trim(),
+        position: 1,
+      }),
+      getBoard: async () => null,
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/columns/${VALID_COLUMN_ID}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "  Renamed column  ",
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      id: VALID_COLUMN_ID,
+      boardId: VALID_BOARD_ID,
+      title: "Renamed column",
+      position: 1,
+    });
+  });
+
+  it("returns a client error when column validation fails", async () => {
+    const app = createApp({
+      updateColumn: async () => {
+        throw new CreateColumnValidationError("Title is required");
+      },
+      getBoard: async () => null,
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/columns/${VALID_COLUMN_ID}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        title: "   ",
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: "Title is required",
+    });
+  });
+
+  it("deletes a column through the column endpoint", async () => {
+    const deletedColumn: DeletedColumn = {
+      boardId: VALID_BOARD_ID,
+    };
+    const app = createApp({
+      deleteColumn: async () => deletedColumn,
+      getBoard: async () => null,
+      createCard: async () => {
+        throw new Error("Unexpected createCard call");
+      },
+    });
+    const server = await openServer(app);
+    openServers.add(server);
+
+    const response = await fetch(`${getBaseUrl(server)}/api/columns/${VALID_COLUMN_ID}`, {
+      method: "DELETE",
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(deletedColumn);
   });
 
   it("updates a card through the card mutation endpoint", async () => {

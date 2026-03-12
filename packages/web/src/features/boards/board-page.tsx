@@ -36,6 +36,7 @@ import {
   type BoardCard,
   type BoardColumn,
   type BoardView,
+  type CreateColumnPayload,
   type CreateCardPayload,
   type UpdateCardPayload,
 } from "./board-api";
@@ -86,10 +87,20 @@ type PendingCardAction = {
   type: "edit" | "delete";
 };
 
+type PendingColumnAction =
+  | { type: "create" }
+  | { type: "update" | "delete"; columnId: string }
+  | null;
+
 type CardComposerProps = {
   columnId: string;
   columnTitle: string;
   onCreate: (columnId: string, payload: CreateCardPayload) => Promise<void>;
+};
+
+type ColumnComposerProps = {
+  onCreate: (payload: CreateColumnPayload) => Promise<void>;
+  pendingColumnAction: PendingColumnAction;
 };
 
 type SortableColumnProps = {
@@ -97,11 +108,14 @@ type SortableColumnProps = {
   column: BoardColumn;
   columnIndex: number;
   isReordering: boolean;
+  pendingColumnAction: PendingColumnAction;
   pendingCardAction: PendingCardAction | null;
   cardActionError: { cardId: string; message: string } | null;
   onMoveColumn: (columnId: string, direction: -1 | 1) => void;
   onMoveCardWithinColumn: (columnId: string, cardId: string, direction: -1 | 1) => void;
   onMoveCardAcrossColumns: (sourceColumnId: string, cardId: string, direction: -1 | 1) => void;
+  onRenameColumn: (column: BoardColumn) => Promise<void>;
+  onDeleteColumn: (column: BoardColumn) => Promise<void>;
   onCreateCard: (columnId: string, payload: CreateCardPayload) => Promise<void>;
   onEditCard: (card: BoardCard) => void;
   onDeleteCard: (card: BoardCard) => Promise<void>;
@@ -168,6 +182,38 @@ const getDeleteErrorMessage = (error: unknown): string => {
   }
 
   return "No pudimos eliminar la tarjeta. Intenta de nuevo.";
+};
+
+const getCreateColumnErrorMessage = (error: unknown): string => {
+  if (error instanceof ApiClientError && error.status === 400) {
+    return "Ingresa un titulo valido para crear la columna.";
+  }
+
+  if (error instanceof ApiClientError && error.status === 404) {
+    return "El tablero ya no existe. Recarga la ruta actual.";
+  }
+
+  return "No pudimos crear la columna. Intenta de nuevo.";
+};
+
+const getUpdateColumnErrorMessage = (error: unknown): string => {
+  if (error instanceof ApiClientError && error.status === 400) {
+    return "Ingresa un titulo valido para renombrar la columna.";
+  }
+
+  if (error instanceof ApiClientError && error.status === 404) {
+    return "La columna ya no existe. Refrescamos el tablero para sincronizarlo.";
+  }
+
+  return "No pudimos renombrar la columna. Intenta de nuevo.";
+};
+
+const getDeleteColumnErrorMessage = (error: unknown): string => {
+  if (error instanceof ApiClientError && error.status === 404) {
+    return "La columna ya no existe. Refrescamos el tablero para sincronizarlo.";
+  }
+
+  return "No pudimos eliminar la columna. Intenta de nuevo.";
 };
 
 const updateCardInBoard = (board: BoardView, updatedCard: BoardCard & { columnId: string }): BoardView => ({
@@ -276,6 +322,50 @@ const CardComposer = ({ columnId, columnTitle, onCreate }: CardComposerProps) =>
       </label>
       <button className="card-composer-submit" disabled={isSubmitting} type="submit">
         {isSubmitting ? "Guardando..." : "Crear tarjeta"}
+      </button>
+      {errorMessage === null ? null : (
+        <p className="board-feedback board-feedback-error" role="alert">
+          {errorMessage}
+        </p>
+      )}
+    </form>
+  );
+};
+
+const ColumnComposer = ({ onCreate, pendingColumnAction }: ColumnComposerProps) => {
+  const [title, setTitle] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const isSubmitting = pendingColumnAction?.type === "create";
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setErrorMessage(null);
+
+    try {
+      await onCreate({ title });
+      setTitle("");
+    } catch (error) {
+      setErrorMessage(getCreateColumnErrorMessage(error));
+    }
+  };
+
+  return (
+    <form className="card-composer" onSubmit={handleSubmit}>
+      <h3 className="card-composer-title">Nueva columna</h3>
+      <label className="card-composer-label">
+        <span>Titulo</span>
+        <input
+          aria-label="Titulo de la nueva columna"
+          className="card-composer-input"
+          name="title"
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="Por ejemplo, In progress"
+          value={title}
+        />
+      </label>
+      <button className="card-composer-submit" disabled={pendingColumnAction !== null} type="submit">
+        {isSubmitting ? "Guardando..." : "Crear columna"}
       </button>
       {errorMessage === null ? null : (
         <p className="board-feedback board-feedback-error" role="alert">
@@ -430,11 +520,14 @@ const SortableColumn = ({
   column,
   columnIndex,
   isReordering,
+  pendingColumnAction,
   pendingCardAction,
   cardActionError,
   onMoveColumn,
   onMoveCardWithinColumn,
   onMoveCardAcrossColumns,
+  onRenameColumn,
+  onDeleteColumn,
   onCreateCard,
   onEditCard,
   onDeleteCard,
@@ -458,6 +551,9 @@ const SortableColumn = ({
     transition,
   };
 
+  const isUpdatingThisColumn = pendingColumnAction?.type === "update" && pendingColumnAction.columnId === column.id;
+  const isDeletingThisColumn = pendingColumnAction?.type === "delete" && pendingColumnAction.columnId === column.id;
+
   return (
     <article
       className={`board-column ${isDragging ? "board-column-dragging" : ""} ${isOver ? "board-column-over" : ""}`}
@@ -472,7 +568,7 @@ const SortableColumn = ({
             <button
               aria-label={`Arrastrar columna ${column.title}`}
               className="drag-handle"
-              disabled={isReordering || pendingCardAction !== null}
+              disabled={isReordering || pendingCardAction !== null || pendingColumnAction !== null}
               ref={setActivatorNodeRef}
               type="button"
               {...attributes}
@@ -488,7 +584,9 @@ const SortableColumn = ({
           <button
             aria-label={`Mover ${column.title} a la izquierda`}
             className="board-action-button"
-            disabled={isReordering || pendingCardAction !== null || columnIndex === 0}
+            disabled={
+              isReordering || pendingCardAction !== null || pendingColumnAction !== null || columnIndex === 0
+            }
             onClick={() => onMoveColumn(column.id, -1)}
             type="button"
           >
@@ -498,12 +596,33 @@ const SortableColumn = ({
             aria-label={`Mover ${column.title} a la derecha`}
             className="board-action-button"
             disabled={
-              isReordering || pendingCardAction !== null || columnIndex === board.columns.length - 1
+              isReordering ||
+              pendingCardAction !== null ||
+              pendingColumnAction !== null ||
+              columnIndex === board.columns.length - 1
             }
             onClick={() => onMoveColumn(column.id, 1)}
             type="button"
           >
             Der
+          </button>
+          <button
+            aria-label={`Renombrar columna ${column.title}`}
+            className="board-action-button"
+            disabled={pendingColumnAction !== null}
+            onClick={() => void onRenameColumn(column)}
+            type="button"
+          >
+            {isUpdatingThisColumn ? "Guardando..." : "Renombrar"}
+          </button>
+          <button
+            aria-label={`Eliminar columna ${column.title}`}
+            className="board-action-button board-action-button-danger"
+            disabled={pendingColumnAction !== null}
+            onClick={() => void onDeleteColumn(column)}
+            type="button"
+          >
+            {isDeletingThisColumn ? "Eliminando..." : "Eliminar"}
           </button>
         </div>
       </header>
@@ -567,7 +686,9 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
   const [reorderErrorMessage, setReorderErrorMessage] = useState<string | null>(null);
   const [editingCard, setEditingCard] = useState<EditCardState | null>(null);
   const [pendingCardAction, setPendingCardAction] = useState<PendingCardAction | null>(null);
+  const [pendingColumnAction, setPendingColumnAction] = useState<PendingColumnAction>(null);
   const [cardActionError, setCardActionError] = useState<{ cardId: string; message: string } | null>(null);
+  const [columnActionErrorMessage, setColumnActionErrorMessage] = useState<string | null>(null);
   const [activeDragItem, setActiveDragItem] = useState<ActiveDragItem>(null);
 
   const sensors = useSensors(
@@ -598,6 +719,7 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
   const applyBoardState = useEffectEvent((boardView: BoardView) => {
     setBoardState(boardView);
     setReorderErrorMessage(null);
+    setColumnActionErrorMessage(null);
   });
 
   const applyLocalBoardChange = useEffectEvent((updateBoard: (currentBoard: BoardView) => BoardView) => {
@@ -644,6 +766,68 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
   const handleCreateCard = async (columnId: string, payload: CreateCardPayload) => {
     await boardApi.createCard(columnId, payload);
     await loadBoard(boardId);
+  };
+
+  const handleCreateColumn = async (payload: CreateColumnPayload) => {
+    setPendingColumnAction({ type: "create" });
+    setColumnActionErrorMessage(null);
+
+    try {
+      await boardApi.createColumn(boardId, payload);
+      await loadBoard(boardId);
+    } catch (error) {
+      if (error instanceof ApiClientError && error.status === 404) {
+        await loadBoard(boardId);
+      }
+
+      throw error;
+    } finally {
+      setPendingColumnAction(null);
+    }
+  };
+
+  const handleRenameColumn = async (column: BoardColumn) => {
+    const nextTitle = window.prompt(`Nuevo titulo para \"${column.title}\"`, column.title);
+    if (nextTitle === null) {
+      return;
+    }
+
+    setPendingColumnAction({ type: "update", columnId: column.id });
+    setColumnActionErrorMessage(null);
+
+    try {
+      await boardApi.updateColumn(column.id, { title: nextTitle });
+      await loadBoard(boardId);
+    } catch (error) {
+      setColumnActionErrorMessage(getUpdateColumnErrorMessage(error));
+      if (error instanceof ApiClientError && error.status === 404) {
+        await loadBoard(boardId);
+      }
+    } finally {
+      setPendingColumnAction(null);
+    }
+  };
+
+  const handleDeleteColumn = async (column: BoardColumn) => {
+    const shouldDelete = window.confirm(`Eliminar \"${column.title}\"? Esta accion no se puede deshacer.`);
+    if (!shouldDelete) {
+      return;
+    }
+
+    setPendingColumnAction({ type: "delete", columnId: column.id });
+    setColumnActionErrorMessage(null);
+
+    try {
+      await boardApi.deleteColumn(column.id);
+      await loadBoard(boardId);
+    } catch (error) {
+      setColumnActionErrorMessage(getDeleteColumnErrorMessage(error));
+      if (error instanceof ApiClientError && error.status === 404) {
+        await loadBoard(boardId);
+      }
+    } finally {
+      setPendingColumnAction(null);
+    }
   };
 
   const handleStartEditCard = (card: BoardCard) => {
@@ -886,11 +1070,17 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
           {reorderErrorMessage}
         </p>
       )}
+      {columnActionErrorMessage === null ? null : (
+        <p className="board-feedback board-feedback-error board-feedback-banner" role="alert">
+          {columnActionErrorMessage}
+        </p>
+      )}
+      <ColumnComposer onCreate={handleCreateColumn} pendingColumnAction={pendingColumnAction} />
 
       {state.status === "empty" ? (
         <div className="board-empty-state">
           <h3>Este tablero todavia no tiene columnas</h3>
-          <p>Cuando existan columnas, cada una mostrara sus tarjetas y el formulario de alta.</p>
+          <p>Crea la primera columna desde esta vista para empezar a organizar tarjetas.</p>
         </div>
       ) : (
         <DndContext
@@ -911,11 +1101,14 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
                   isReordering={isReordering}
                   key={column.id}
                   onCreateCard={handleCreateCard}
+                  onDeleteColumn={handleDeleteColumn}
                   onDeleteCard={handleDeleteCard}
                   onEditCard={handleStartEditCard}
                   onMoveCardAcrossColumns={handleMoveCardAcrossColumns}
                   onMoveCardWithinColumn={handleMoveCardWithinColumn}
                   onMoveColumn={handleMoveColumn}
+                  onRenameColumn={handleRenameColumn}
+                  pendingColumnAction={pendingColumnAction}
                   pendingCardAction={pendingCardAction}
                 />
               ))}

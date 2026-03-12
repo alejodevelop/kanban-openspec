@@ -1,12 +1,18 @@
 import express from "express";
 
+import { type CreateBoardUseCase } from "./features/boards/create-board.ts";
+import { type DeleteBoardUseCase } from "./features/boards/delete-board.ts";
 import { type GetBoardUseCase } from "./features/boards/get-board.ts";
 import { type ListBoardsUseCase } from "./features/boards/list-boards.ts";
 import { type ReorderColumnsUseCase } from "./features/boards/reorder-columns.ts";
+import { type UpdateBoardUseCase } from "./features/boards/update-board.ts";
 import { type CreateCardUseCase } from "./features/cards/create-card.ts";
 import { type DeleteCardUseCase } from "./features/cards/delete-card.ts";
 import { type ReorderCardsUseCase } from "./features/cards/reorder-cards.ts";
 import { type UpdateCardUseCase } from "./features/cards/update-card.ts";
+import { type DeleteColumnUseCase } from "./features/columns/delete-column.ts";
+import { type CreateColumnUseCase } from "./features/columns/create-column.ts";
+import { type UpdateColumnUseCase } from "./features/columns/update-column.ts";
 import { createHealthRouter, type HealthCheck } from "./routes/health.ts";
 import { createBoardsRouter } from "./routes/boards.ts";
 import { createCardsRouter } from "./routes/cards.ts";
@@ -16,6 +22,12 @@ type AppOptions = {
   checkDatabase?: HealthCheck;
   listBoards?: ListBoardsUseCase;
   getBoard?: GetBoardUseCase;
+  createBoard?: CreateBoardUseCase;
+  updateBoard?: UpdateBoardUseCase;
+  deleteBoard?: DeleteBoardUseCase;
+  createColumn?: CreateColumnUseCase;
+  updateColumn?: UpdateColumnUseCase;
+  deleteColumn?: DeleteColumnUseCase;
   createCard?: CreateCardUseCase;
   updateCard?: UpdateCardUseCase;
   deleteCard?: DeleteCardUseCase;
@@ -27,6 +39,12 @@ export const createApp = ({
   checkDatabase,
   listBoards,
   getBoard,
+  createBoard,
+  updateBoard,
+  deleteBoard,
+  createColumn,
+  updateColumn,
+  deleteColumn,
   createCard,
   updateCard,
   deleteCard,
@@ -50,8 +68,20 @@ export const createApp = ({
   });
   app.use(express.json());
   app.use("/health", createHealthRouter({ checkDatabase }));
-  app.use("/api/boards", createBoardsRouter({ listBoards, getBoard, reorderColumns, reorderCards }));
-  app.use("/api/columns", createColumnsRouter({ createCard }));
+  app.use(
+    "/api/boards",
+    createBoardsRouter({
+      listBoards,
+      getBoard,
+      createBoard,
+      updateBoard,
+      deleteBoard,
+      createColumn,
+      reorderColumns,
+      reorderCards,
+    }),
+  );
+  app.use("/api/columns", createColumnsRouter({ createCard, updateColumn, deleteColumn }));
   app.use("/api/cards", createCardsRouter({ updateCard, deleteCard }));
 
   return app;
