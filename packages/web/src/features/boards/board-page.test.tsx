@@ -399,7 +399,7 @@ describe("BoardRoute", () => {
     });
   });
 
-  it("moves a card to another column and keeps the new order after reloading the page", async () => {
+  it("moves a card to another column through the board controls", async () => {
     const boardState: BoardView = buildBoard([
       {
         id: "22222222-2222-4222-8222-222222222222",
@@ -467,7 +467,7 @@ describe("BoardRoute", () => {
     );
 
     const user = userEvent.setup();
-    const firstRender = renderBoardRoute();
+    renderBoardRoute();
 
     expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
 
@@ -481,18 +481,49 @@ describe("BoardRoute", () => {
 
       expect(within(doneColumn).getByText("Redactar alcance")).toBeTruthy();
     });
+  });
 
-    firstRender.unmount();
+  it("restores the previous board and shows an error when a reorder fails", async () => {
+    const boardState: BoardView = buildBoard([
+      {
+        id: "22222222-2222-4222-8222-222222222222",
+        title: "Todo",
+        position: 0,
+        cards: [],
+      },
+      {
+        id: "33333333-3333-4333-8333-333333333333",
+        title: "Done",
+        position: 1,
+        cards: [],
+      },
+    ]);
+
+    boardApiMocks.getBoard.mockImplementation(async () => structuredClone(boardState));
+    boardApiMocks.createCard.mockRejectedValue(new Error("Unexpected createCard call"));
+    boardApiMocks.reorderCards.mockRejectedValue(new Error("Unexpected reorderCards call"));
+    boardApiMocks.reorderColumns.mockRejectedValue(
+      new ApiClientError("Request failed with status 500", 500, { error: "Internal Server Error" }),
+    );
+
+    const user = userEvent.setup();
     renderBoardRoute();
 
-    await waitFor(() => {
-      const doneColumn = screen.getByRole("heading", { name: /done/i }).closest("article");
-      if (doneColumn === null) {
-        throw new Error("Expected reloaded Done column article");
-      }
+    expect(await screen.findByRole("heading", { name: /delivery board/i })).toBeTruthy();
 
-      expect(within(doneColumn).getByText("Redactar alcance")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /mover todo a la derecha/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toBeTruthy();
+      expect(screen.getByText(/no pudimos guardar el nuevo orden/i)).toBeTruthy();
     });
+
+    const boardColumns = [
+      ...screen.getByRole("list", { name: /columnas del tablero/i }).querySelectorAll<HTMLElement>(".board-column"),
+    ];
+
+    expect(within(boardColumns[0]).getByRole("heading", { name: /todo/i })).toBeTruthy();
+    expect(within(boardColumns[1]).getByRole("heading", { name: /done/i })).toBeTruthy();
   });
 
   it("edits a created card without reloading the page", async () => {

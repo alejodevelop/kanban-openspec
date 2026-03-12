@@ -1,14 +1,63 @@
-import { startTransition, useEffect, useEffectEvent, useState, type FormEvent } from "react";
+import {
+  closestCenter,
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  horizontalListSortingStrategy,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  startTransition,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 
 import { ApiClientError } from "../../lib/api-client";
 import {
   boardApi,
   type BoardCard,
+  type BoardColumn,
   type BoardView,
   type CreateCardPayload,
-  type ReorderCardsColumnPayload,
   type UpdateCardPayload,
 } from "./board-api";
+import {
+  BOARD_DRAG_CARD,
+  BOARD_DRAG_COLUMN,
+  BOARD_DROP_COLUMN,
+  getCardAcrossColumnsPlan,
+  getCardDirectionPlan,
+  getCardDragData,
+  getCardDragPlan,
+  getCardSortableId,
+  getColumnDirectionPlan,
+  getColumnDragData,
+  getColumnDropData,
+  getColumnDropZoneId,
+  getColumnReorderPlan,
+  getColumnSortableId,
+  type BoardDragData,
+  type CardReorderPlan,
+  type ColumnReorderPlan,
+} from "./board-reorder";
 
 type BoardPageProps = {
   boardId: string;
@@ -21,11 +70,10 @@ type BoardPageState =
   | { status: "not-found" }
   | { status: "error"; message: string };
 
-type CardComposerProps = {
-  columnId: string;
-  columnTitle: string;
-  onCreate: (columnId: string, payload: CreateCardPayload) => Promise<void>;
-};
+type ActiveDragItem =
+  | { type: typeof BOARD_DRAG_COLUMN; column: BoardColumn }
+  | { type: typeof BOARD_DRAG_CARD; card: BoardCard }
+  | null;
 
 type EditCardState = {
   cardId: string;
@@ -36,6 +84,42 @@ type EditCardState = {
 type PendingCardAction = {
   cardId: string;
   type: "edit" | "delete";
+};
+
+type CardComposerProps = {
+  columnId: string;
+  columnTitle: string;
+  onCreate: (columnId: string, payload: CreateCardPayload) => Promise<void>;
+};
+
+type SortableColumnProps = {
+  board: BoardView;
+  column: BoardColumn;
+  columnIndex: number;
+  isReordering: boolean;
+  pendingCardAction: PendingCardAction | null;
+  cardActionError: { cardId: string; message: string } | null;
+  onMoveColumn: (columnId: string, direction: -1 | 1) => void;
+  onMoveCardWithinColumn: (columnId: string, cardId: string, direction: -1 | 1) => void;
+  onMoveCardAcrossColumns: (sourceColumnId: string, cardId: string, direction: -1 | 1) => void;
+  onCreateCard: (columnId: string, payload: CreateCardPayload) => Promise<void>;
+  onEditCard: (card: BoardCard) => void;
+  onDeleteCard: (card: BoardCard) => Promise<void>;
+};
+
+type SortableCardProps = {
+  board: BoardView;
+  card: BoardCard;
+  cardIndex: number;
+  column: BoardColumn;
+  columnIndex: number;
+  isReordering: boolean;
+  pendingCardAction: PendingCardAction | null;
+  cardActionError: { cardId: string; message: string } | null;
+  onMoveWithinColumn: (columnId: string, cardId: string, direction: -1 | 1) => void;
+  onMoveAcrossColumns: (sourceColumnId: string, cardId: string, direction: -1 | 1) => void;
+  onEditCard: (card: BoardCard) => void;
+  onDeleteCard: (card: BoardCard) => Promise<void>;
 };
 
 const resolveBoardState = (board: BoardView): BoardPageState => {
@@ -117,16 +201,29 @@ const removeCardFromBoard = (board: BoardView, cardId: string): BoardView => ({
   }),
 });
 
-const swapItems = <T,>(items: T[], fromIndex: number, toIndex: number): T[] => {
-  const nextItems = items.slice();
-  const [movedItem] = nextItems.splice(fromIndex, 1);
-
-  if (movedItem === undefined) {
-    return items;
+const getDragData = (value: unknown): BoardDragData | null => {
+  if (typeof value !== "object" || value === null || !("type" in value)) {
+    return null;
   }
 
-  nextItems.splice(toIndex, 0, movedItem);
-  return nextItems;
+  const data = value as Partial<BoardDragData>;
+  if (data.type === BOARD_DRAG_COLUMN && typeof data.columnId === "string") {
+    return { type: data.type, columnId: data.columnId };
+  }
+
+  if (
+    data.type === BOARD_DRAG_CARD &&
+    typeof data.columnId === "string" &&
+    typeof data.cardId === "string"
+  ) {
+    return { type: data.type, columnId: data.columnId, cardId: data.cardId };
+  }
+
+  if (data.type === BOARD_DROP_COLUMN && typeof data.columnId === "string") {
+    return { type: data.type, columnId: data.columnId };
+  }
+
+  return null;
 };
 
 const CardComposer = ({ columnId, columnTitle, onCreate }: CardComposerProps) => {
@@ -189,6 +286,281 @@ const CardComposer = ({ columnId, columnTitle, onCreate }: CardComposerProps) =>
   );
 };
 
+const ColumnDropZone = ({ columnId, children }: { columnId: string; children: ReactNode }) => {
+  const { isOver, setNodeRef } = useDroppable({
+    id: getColumnDropZoneId(columnId),
+    data: getColumnDropData(columnId),
+  });
+
+  return (
+    <ol className={`card-list ${isOver ? "card-list-over" : ""}`} ref={setNodeRef}>
+      {children}
+    </ol>
+  );
+};
+
+const SortableCard = ({
+  board,
+  card,
+  cardIndex,
+  column,
+  columnIndex,
+  isReordering,
+  pendingCardAction,
+  cardActionError,
+  onMoveWithinColumn,
+  onMoveAcrossColumns,
+  onEditCard,
+  onDeleteCard,
+}: SortableCardProps) => {
+  const {
+    attributes,
+    listeners,
+    setActivatorNodeRef,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+    isOver,
+  } = useSortable({
+    id: getCardSortableId(card.id),
+    data: getCardDragData(column.id, card.id),
+  });
+
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const isCardActionPending = pendingCardAction !== null;
+  const isEditingThisCard = pendingCardAction?.cardId === card.id && pendingCardAction.type === "edit";
+  const isDeletingThisCard = pendingCardAction?.cardId === card.id && pendingCardAction.type === "delete";
+
+  return (
+    <li
+      className={`card-item ${isDragging ? "card-item-dragging" : ""} ${isOver ? "card-item-over" : ""}`}
+      key={card.id}
+      ref={setNodeRef}
+      style={style}
+    >
+      <div className="card-item-body">
+        <div className="card-item-topline">
+          <button
+            aria-label={`Arrastrar tarjeta ${card.title}`}
+            className="drag-handle"
+            disabled={isReordering || isCardActionPending}
+            ref={setActivatorNodeRef}
+            type="button"
+            {...attributes}
+            {...listeners}
+          >
+            Arrastrar
+          </button>
+          <p className="card-title">{card.title}</p>
+        </div>
+        {card.description === null ? null : <p className="card-description">{card.description}</p>}
+      </div>
+      <div className="card-actions" aria-label={`Controles accesibles para ${card.title}`}>
+        <button
+          aria-label={`Editar ${card.title}`}
+          className="board-action-button"
+          disabled={isCardActionPending}
+          onClick={() => onEditCard(card)}
+          type="button"
+        >
+          {isEditingThisCard ? "Guardando..." : "Editar"}
+        </button>
+        <button
+          aria-label={`Eliminar ${card.title}`}
+          className="board-action-button board-action-button-danger"
+          disabled={isCardActionPending}
+          onClick={() => void onDeleteCard(card)}
+          type="button"
+        >
+          {isDeletingThisCard ? "Eliminando..." : "Eliminar"}
+        </button>
+        <button
+          aria-label={`Subir ${card.title}`}
+          className="board-action-button"
+          disabled={isReordering || isCardActionPending || cardIndex === 0}
+          onClick={() => onMoveWithinColumn(column.id, card.id, -1)}
+          type="button"
+        >
+          Subir
+        </button>
+        <button
+          aria-label={`Bajar ${card.title}`}
+          className="board-action-button"
+          disabled={isReordering || isCardActionPending || cardIndex === column.cards.length - 1}
+          onClick={() => onMoveWithinColumn(column.id, card.id, 1)}
+          type="button"
+        >
+          Bajar
+        </button>
+        <button
+          aria-label={`Mover ${card.title} a ${board.columns[columnIndex - 1]?.title ?? "la columna anterior"}`}
+          className="board-action-button"
+          disabled={isReordering || isCardActionPending || columnIndex === 0}
+          onClick={() => onMoveAcrossColumns(column.id, card.id, -1)}
+          type="button"
+        >
+          Izq
+        </button>
+        <button
+          aria-label={`Mover ${card.title} a ${board.columns[columnIndex + 1]?.title ?? "la columna siguiente"}`}
+          className="board-action-button"
+          disabled={isReordering || isCardActionPending || columnIndex === board.columns.length - 1}
+          onClick={() => onMoveAcrossColumns(column.id, card.id, 1)}
+          type="button"
+        >
+          Der
+        </button>
+      </div>
+      {cardActionError?.cardId === card.id ? (
+        <p className="board-feedback board-feedback-error" role="alert">
+          {cardActionError.message}
+        </p>
+      ) : null}
+    </li>
+  );
+};
+
+const SortableColumn = ({
+  board,
+  column,
+  columnIndex,
+  isReordering,
+  pendingCardAction,
+  cardActionError,
+  onMoveColumn,
+  onMoveCardWithinColumn,
+  onMoveCardAcrossColumns,
+  onCreateCard,
+  onEditCard,
+  onDeleteCard,
+}: SortableColumnProps) => {
+  const {
+    attributes,
+    listeners,
+    setActivatorNodeRef,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+    isOver,
+  } = useSortable({
+    id: getColumnSortableId(column.id),
+    data: getColumnDragData(column.id),
+  });
+
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <article
+      className={`board-column ${isDragging ? "board-column-dragging" : ""} ${isOver ? "board-column-over" : ""}`}
+      key={column.id}
+      ref={setNodeRef}
+      role="listitem"
+      style={style}
+    >
+      <header className="board-column-header">
+        <div className="board-column-heading">
+          <div className="board-column-title-row">
+            <button
+              aria-label={`Arrastrar columna ${column.title}`}
+              className="drag-handle"
+              disabled={isReordering || pendingCardAction !== null}
+              ref={setActivatorNodeRef}
+              type="button"
+              {...attributes}
+              {...listeners}
+            >
+              Arrastrar
+            </button>
+            <h3>{column.title}</h3>
+          </div>
+          <span>{column.cards.length} tarjetas</span>
+        </div>
+        <div className="board-column-actions" aria-label={`Controles accesibles para ${column.title}`}>
+          <button
+            aria-label={`Mover ${column.title} a la izquierda`}
+            className="board-action-button"
+            disabled={isReordering || pendingCardAction !== null || columnIndex === 0}
+            onClick={() => onMoveColumn(column.id, -1)}
+            type="button"
+          >
+            Izq
+          </button>
+          <button
+            aria-label={`Mover ${column.title} a la derecha`}
+            className="board-action-button"
+            disabled={
+              isReordering || pendingCardAction !== null || columnIndex === board.columns.length - 1
+            }
+            onClick={() => onMoveColumn(column.id, 1)}
+            type="button"
+          >
+            Der
+          </button>
+        </div>
+      </header>
+
+      <SortableContext items={column.cards.map((card) => getCardSortableId(card.id))} strategy={verticalListSortingStrategy}>
+        <ColumnDropZone columnId={column.id}>
+          {column.cards.map((card, cardIndex) => (
+            <SortableCard
+              board={board}
+              card={card}
+              cardActionError={cardActionError}
+              cardIndex={cardIndex}
+              column={column}
+              columnIndex={columnIndex}
+              isReordering={isReordering}
+              key={card.id}
+              onDeleteCard={onDeleteCard}
+              onEditCard={onEditCard}
+              onMoveAcrossColumns={onMoveCardAcrossColumns}
+              onMoveWithinColumn={onMoveCardWithinColumn}
+              pendingCardAction={pendingCardAction}
+            />
+          ))}
+        </ColumnDropZone>
+      </SortableContext>
+
+      <CardComposer columnId={column.id} columnTitle={column.title} onCreate={onCreateCard} />
+    </article>
+  );
+};
+
+const ColumnOverlay = ({ column }: { column: BoardColumn }) => (
+  <article className="board-column board-column-overlay">
+    <header className="board-column-header">
+      <div className="board-column-heading">
+        <div className="board-column-title-row">
+          <span className="drag-handle drag-handle-static">Arrastrar</span>
+          <h3>{column.title}</h3>
+        </div>
+        <span>{column.cards.length} tarjetas</span>
+      </div>
+    </header>
+  </article>
+);
+
+const CardOverlay = ({ card }: { card: BoardCard }) => (
+  <div className="card-item card-item-overlay">
+    <div className="card-item-body">
+      <div className="card-item-topline">
+        <span className="drag-handle drag-handle-static">Arrastrar</span>
+        <p className="card-title">{card.title}</p>
+      </div>
+      {card.description === null ? null : <p className="card-description">{card.description}</p>}
+    </div>
+  </div>
+);
+
 export const BoardPage = ({ boardId }: BoardPageProps) => {
   const [state, setState] = useState<BoardPageState>({ status: "loading" });
   const [isReordering, setIsReordering] = useState(false);
@@ -196,12 +568,48 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
   const [editingCard, setEditingCard] = useState<EditCardState | null>(null);
   const [pendingCardAction, setPendingCardAction] = useState<PendingCardAction | null>(null);
   const [cardActionError, setCardActionError] = useState<{ cardId: string; message: string } | null>(null);
+  const [activeDragItem, setActiveDragItem] = useState<ActiveDragItem>(null);
 
-  const applyBoardState = useEffectEvent((board: BoardView) => {
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 150,
+        tolerance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  const board = state.status === "ready" || state.status === "empty" ? state.board : null;
+
+  const setBoardState = useEffectEvent((boardView: BoardView) => {
     startTransition(() => {
-      setState(resolveBoardState(board));
+      setState(resolveBoardState(boardView));
     });
+  });
+
+  const applyBoardState = useEffectEvent((boardView: BoardView) => {
+    setBoardState(boardView);
     setReorderErrorMessage(null);
+  });
+
+  const applyLocalBoardChange = useEffectEvent((updateBoard: (currentBoard: BoardView) => BoardView) => {
+    startTransition(() => {
+      setState((current) => {
+        if (current.status !== "ready" && current.status !== "empty") {
+          return current;
+        }
+
+        return resolveBoardState(updateBoard(current.board));
+      });
+    });
   });
 
   const loadBoard = useEffectEvent(async (nextBoardId: string) => {
@@ -214,8 +622,8 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
     });
 
     try {
-      const board = await boardApi.getBoard(nextBoardId);
-      applyBoardState(board);
+      const boardView = await boardApi.getBoard(nextBoardId);
+      applyBoardState(boardView);
     } catch (error) {
       if (error instanceof ApiClientError && error.status === 404) {
         setState({ status: "not-found" });
@@ -227,18 +635,6 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
         message: "No pudimos cargar el tablero. Verifica la API e intenta de nuevo.",
       });
     }
-  });
-
-  const applyLocalBoardChange = useEffectEvent((updateBoard: (board: BoardView) => BoardView) => {
-    startTransition(() => {
-      setState((current) => {
-        if (current.status !== "ready" && current.status !== "empty") {
-          return current;
-        }
-
-        return resolveBoardState(updateBoard(current.board));
-      });
-    });
   });
 
   useEffect(() => {
@@ -276,7 +672,7 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
 
     try {
       const updatedCard = await boardApi.updateCard(editingCard.cardId, payload);
-      applyLocalBoardChange((board) => updateCardInBoard(board, updatedCard));
+      applyLocalBoardChange((currentBoard) => updateCardInBoard(currentBoard, updatedCard));
       setEditingCard(null);
     } catch (error) {
       setCardActionError({
@@ -299,7 +695,7 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
 
     try {
       await boardApi.deleteCard(card.id);
-      applyLocalBoardChange((board) => removeCardFromBoard(board, card.id));
+      applyLocalBoardChange((currentBoard) => removeCardFromBoard(currentBoard, card.id));
       if (editingCard?.cardId === card.id) {
         setEditingCard(null);
       }
@@ -313,104 +709,145 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
     }
   };
 
-  const runReorder = useEffectEvent(async (reorderOperation: () => Promise<BoardView>) => {
+  const runColumnPlan = useEffectEvent(async (plan: ColumnReorderPlan | null) => {
+    if (board === null || plan === null) {
+      return;
+    }
+
+    const previousBoard = board;
+
     setIsReordering(true);
     setReorderErrorMessage(null);
+    setBoardState(plan.board);
 
     try {
-      const board = await reorderOperation();
-      applyBoardState(board);
+      const nextBoard = await boardApi.reorderColumns(previousBoard.id, { columnIds: plan.columnIds });
+      applyBoardState(nextBoard);
     } catch (error) {
+      setBoardState(previousBoard);
       setReorderErrorMessage(getReorderErrorMessage(error));
     } finally {
       setIsReordering(false);
     }
   });
 
-  const handleMoveColumn = (columnIndex: number, direction: -1 | 1) => {
-    if (state.status !== "ready") {
+  const runCardPlan = useEffectEvent(async (plan: CardReorderPlan | null) => {
+    if (board === null || plan === null) {
       return;
     }
 
-    const destinationIndex = columnIndex + direction;
-    if (destinationIndex < 0 || destinationIndex >= state.board.columns.length) {
+    const previousBoard = board;
+
+    setIsReordering(true);
+    setReorderErrorMessage(null);
+    setBoardState(plan.board);
+
+    try {
+      const nextBoard = await boardApi.reorderCards(previousBoard.id, { columns: plan.columns });
+      applyBoardState(nextBoard);
+    } catch (error) {
+      setBoardState(previousBoard);
+      setReorderErrorMessage(getReorderErrorMessage(error));
+    } finally {
+      setIsReordering(false);
+    }
+  });
+
+  const handleMoveColumn = (columnId: string, direction: -1 | 1) => {
+    if (board === null) {
       return;
     }
 
-    const nextColumnIds = swapItems(
-      state.board.columns.map((column) => column.id),
-      columnIndex,
-      destinationIndex,
-    );
-
-    void runReorder(async () => await boardApi.reorderColumns(state.board.id, { columnIds: nextColumnIds }));
+    void runColumnPlan(getColumnDirectionPlan(board, columnId, direction));
   };
 
-  const handleReorderCards = (columns: ReorderCardsColumnPayload[]) => {
-    if (state.status !== "ready") {
+  const handleMoveCardWithinColumn = (columnId: string, cardId: string, direction: -1 | 1) => {
+    if (board === null) {
       return;
     }
 
-    void runReorder(async () => await boardApi.reorderCards(state.board.id, { columns }));
+    void runCardPlan(getCardDirectionPlan(board, columnId, cardId, direction));
   };
 
-  const handleMoveCardWithinColumn = (columnIndex: number, cardIndex: number, direction: -1 | 1) => {
-    if (state.status !== "ready") {
+  const handleMoveCardAcrossColumns = (sourceColumnId: string, cardId: string, direction: -1 | 1) => {
+    if (board === null) {
       return;
     }
 
-    const column = state.board.columns[columnIndex];
-    if (column === undefined) {
+    const sourceColumnIndex = board.columns.findIndex((column) => column.id === sourceColumnId);
+    if (sourceColumnIndex < 0) {
       return;
     }
 
-    const destinationIndex = cardIndex + direction;
-    if (destinationIndex < 0 || destinationIndex >= column.cards.length) {
+    const destinationColumn = board.columns[sourceColumnIndex + direction];
+    if (destinationColumn === undefined) {
       return;
     }
 
-    handleReorderCards([
-      {
-        columnId: column.id,
-        cardIds: swapItems(
-          column.cards.map((card) => card.id),
-          cardIndex,
-          destinationIndex,
-        ),
-      },
-    ]);
+    void runCardPlan(getCardAcrossColumnsPlan(board, sourceColumnId, cardId, destinationColumn.id));
   };
 
-  const handleMoveCardAcrossColumns = (columnIndex: number, cardIndex: number, direction: -1 | 1) => {
-    if (state.status !== "ready") {
+  const handleDragStart = ({ active }: DragStartEvent) => {
+    if (board === null) {
       return;
     }
 
-    const sourceColumn = state.board.columns[columnIndex];
-    const destinationColumn = state.board.columns[columnIndex + direction];
-    const movedCard = sourceColumn?.cards[cardIndex];
-
-    if (sourceColumn === undefined || destinationColumn === undefined || movedCard === undefined) {
+    const activeData = getDragData(active.data.current);
+    if (activeData?.type === BOARD_DRAG_COLUMN) {
+      const activeColumn = board.columns.find((entry) => entry.id === activeData.columnId);
+      setActiveDragItem(activeColumn === undefined ? null : { type: BOARD_DRAG_COLUMN, column: activeColumn });
       return;
     }
 
-    handleReorderCards([
-      {
-        columnId: sourceColumn.id,
-        cardIds: sourceColumn.cards
-          .filter((_, index) => index !== cardIndex)
-          .map((card) => card.id),
-      },
-      {
-        columnId: destinationColumn.id,
-        cardIds: [...destinationColumn.cards.map((card) => card.id), movedCard.id],
-      },
-    ]);
+    if (activeData?.type === BOARD_DRAG_CARD) {
+      const activeCard = board.columns
+        .flatMap((column) => column.cards)
+        .find((entry) => entry.id === activeData.cardId);
+      setActiveDragItem(activeCard === undefined ? null : { type: BOARD_DRAG_CARD, card: activeCard });
+    }
   };
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    setActiveDragItem(null);
+
+    if (board === null || over === null) {
+      return;
+    }
+
+    const activeData = getDragData(active.data.current);
+    const overData = getDragData(over.data.current);
+
+    if (activeData?.type === BOARD_DRAG_COLUMN && overData?.type === BOARD_DRAG_COLUMN) {
+      void runColumnPlan(getColumnReorderPlan(board, activeData.columnId, overData.columnId));
+      return;
+    }
+
+    if (activeData?.type !== BOARD_DRAG_CARD || overData === null) {
+      return;
+    }
+
+    if (overData.type === BOARD_DRAG_CARD) {
+      void runCardPlan(getCardDragPlan(board, activeData.cardId, overData));
+      return;
+    }
+
+    if (overData.type === BOARD_DROP_COLUMN) {
+      void runCardPlan(getCardDragPlan(board, activeData.cardId, overData));
+    }
+  };
+
+  const handleDragCancel = () => {
+    setActiveDragItem(null);
+  };
+
+  const columnSortableIds = useMemo(
+    () => board?.columns.map((column) => getColumnSortableId(column.id)) ?? [],
+    [board],
+  );
 
   if (state.status === "loading") {
     return (
-      <section className="board-status" aria-live="polite">
+      <section aria-live="polite" className="board-status">
         <h2>Cargando tablero...</h2>
         <p>Consultando columnas y tarjetas desde la API.</p>
       </section>
@@ -435,16 +872,14 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
     );
   }
 
-  const board = state.board;
-
   return (
     <section className="board-page">
       <header className="board-header">
         <div>
           <p className="board-kicker">Board View</p>
-          <h2>{board.title}</h2>
+          <h2>{state.board.title}</h2>
         </div>
-        <p className="board-meta">Ruta activa: /boards/{board.id}</p>
+        <p className="board-meta">Ruta activa: /boards/{state.board.id}</p>
       </header>
       {reorderErrorMessage === null ? null : (
         <p className="board-feedback board-feedback-error board-feedback-banner" role="alert">
@@ -458,134 +893,44 @@ export const BoardPage = ({ boardId }: BoardPageProps) => {
           <p>Cuando existan columnas, cada una mostrara sus tarjetas y el formulario de alta.</p>
         </div>
       ) : (
-        <div className="board-columns" role="list" aria-label="Columnas del tablero">
-          {board.columns.map((column, columnIndex) => (
-            <article className="board-column" key={column.id} role="listitem">
-              <header className="board-column-header">
-                <div className="board-column-heading">
-                  <h3>{column.title}</h3>
-                  <span>{column.cards.length} tarjetas</span>
-                </div>
-                <div className="board-column-actions">
-                  <button
-                    aria-label={`Mover ${column.title} a la izquierda`}
-                    className="board-action-button"
-                    disabled={isReordering || columnIndex === 0}
-                    onClick={() => handleMoveColumn(columnIndex, -1)}
-                    type="button"
-                  >
-                    Izq
-                  </button>
-                  <button
-                    aria-label={`Mover ${column.title} a la derecha`}
-                    className="board-action-button"
-                    disabled={isReordering || columnIndex === board.columns.length - 1}
-                    onClick={() => handleMoveColumn(columnIndex, 1)}
-                    type="button"
-                  >
-                    Der
-                  </button>
-                </div>
-              </header>
+        <DndContext
+          collisionDetection={closestCenter}
+          onDragCancel={handleDragCancel}
+          onDragEnd={handleDragEnd}
+          onDragStart={handleDragStart}
+          sensors={sensors}
+        >
+          <SortableContext items={columnSortableIds} strategy={horizontalListSortingStrategy}>
+            <div className="board-columns" role="list" aria-label="Columnas del tablero">
+              {state.board.columns.map((column, columnIndex) => (
+                <SortableColumn
+                  board={state.board}
+                  cardActionError={cardActionError}
+                  column={column}
+                  columnIndex={columnIndex}
+                  isReordering={isReordering}
+                  key={column.id}
+                  onCreateCard={handleCreateCard}
+                  onDeleteCard={handleDeleteCard}
+                  onEditCard={handleStartEditCard}
+                  onMoveCardAcrossColumns={handleMoveCardAcrossColumns}
+                  onMoveCardWithinColumn={handleMoveCardWithinColumn}
+                  onMoveColumn={handleMoveColumn}
+                  pendingCardAction={pendingCardAction}
+                />
+              ))}
+            </div>
+          </SortableContext>
 
-              <ol className="card-list">
-                {column.cards.map((card, cardIndex) => (
-                  <li className="card-item" key={card.id}>
-                    <div className="card-item-body">
-                      <p className="card-title">{card.title}</p>
-                      {card.description === null ? null : (
-                        <p className="card-description">{card.description}</p>
-                      )}
-                    </div>
-                     <div className="card-actions">
-                       <button
-                         aria-label={`Editar ${card.title}`}
-                         className="board-action-button"
-                         disabled={pendingCardAction !== null}
-                         onClick={() => handleStartEditCard(card)}
-                         type="button"
-                       >
-                         {pendingCardAction?.cardId === card.id && pendingCardAction.type === "edit"
-                           ? "Guardando..."
-                           : "Editar"}
-                       </button>
-                       <button
-                         aria-label={`Eliminar ${card.title}`}
-                         className="board-action-button board-action-button-danger"
-                         disabled={pendingCardAction !== null}
-                         onClick={() => void handleDeleteCard(card)}
-                         type="button"
-                       >
-                         {pendingCardAction?.cardId === card.id && pendingCardAction.type === "delete"
-                           ? "Eliminando..."
-                           : "Eliminar"}
-                       </button>
-                       <button
-                         aria-label={`Subir ${card.title}`}
-                         className="board-action-button"
-                         disabled={isReordering || pendingCardAction !== null || cardIndex === 0}
-                         onClick={() => handleMoveCardWithinColumn(columnIndex, cardIndex, -1)}
-                         type="button"
-                       >
-                        Subir
-                      </button>
-                       <button
-                         aria-label={`Bajar ${card.title}`}
-                         className="board-action-button"
-                         disabled={
-                           isReordering ||
-                           pendingCardAction !== null ||
-                           cardIndex === column.cards.length - 1
-                         }
-                         onClick={() => handleMoveCardWithinColumn(columnIndex, cardIndex, 1)}
-                         type="button"
-                       >
-                        Bajar
-                      </button>
-                       <button
-                        aria-label={`Mover ${card.title} a ${
-                          board.columns[columnIndex - 1]?.title ?? "la columna anterior"
-                        }`}
-                         className="board-action-button"
-                         disabled={isReordering || pendingCardAction !== null || columnIndex === 0}
-                         onClick={() => handleMoveCardAcrossColumns(columnIndex, cardIndex, -1)}
-                         type="button"
-                       >
-                        Izq
-                      </button>
-                       <button
-                        aria-label={`Mover ${card.title} a ${
-                          board.columns[columnIndex + 1]?.title ?? "la columna siguiente"
-                        }`}
-                         className="board-action-button"
-                         disabled={
-                           isReordering ||
-                           pendingCardAction !== null ||
-                           columnIndex === board.columns.length - 1
-                         }
-                         onClick={() => handleMoveCardAcrossColumns(columnIndex, cardIndex, 1)}
-                         type="button"
-                       >
-                         Der
-                       </button>
-                     </div>
-                     {cardActionError?.cardId === card.id ? (
-                       <p className="board-feedback board-feedback-error" role="alert">
-                         {cardActionError.message}
-                       </p>
-                     ) : null}
-                   </li>
-                 ))}
-              </ol>
-
-              <CardComposer columnId={column.id} columnTitle={column.title} onCreate={handleCreateCard} />
-            </article>
-          ))}
-        </div>
+          <DragOverlay>
+            {activeDragItem?.type === BOARD_DRAG_COLUMN ? <ColumnOverlay column={activeDragItem.column} /> : null}
+            {activeDragItem?.type === BOARD_DRAG_CARD ? <CardOverlay card={activeDragItem.card} /> : null}
+          </DragOverlay>
+        </DndContext>
       )}
       {editingCard === null ? null : (
         <div className="board-modal-backdrop" role="presentation">
-          <div aria-modal="true" className="board-modal" role="dialog" aria-label="Editar tarjeta">
+          <div aria-label="Editar tarjeta" aria-modal="true" className="board-modal" role="dialog">
             <form className="board-modal-form" onSubmit={handleEditCard}>
               <div className="board-modal-header">
                 <div>
